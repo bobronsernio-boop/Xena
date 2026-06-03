@@ -1,0 +1,2059 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Compatible Sandbox Stream - XENA</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --yt-black: #0f0f0f;
+      --yt-dark-gray: #1f1f1f;
+      --yt-light-gray: #272727;
+      --yt-border: #3f3f3f;
+      --yt-text: #f1f1f1;
+      --yt-muted: #aaaaaa;
+      --yt-red: #ff0000;
+      --yt-white: #ffffff;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background-color: var(--yt-black);
+      color: var(--yt-text);
+      font-family: "Roboto", sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--yt-black);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #3e3e3e;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #5a5a5a;
+    }
+
+    /* Header */
+    .yt-header {
+      background-color: var(--yt-black);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+    }
+
+    .yt-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .yt-logo {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      text-decoration: none;
+      color: var(--yt-white);
+      font-weight: 700;
+      font-family: inherit;
+      font-size: 20px;
+      letter-spacing: -0.5px;
+    }
+
+    .yt-logo-badge {
+      background-color: var(--yt-red);
+      color: var(--yt-white);
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 2px;
+      font-weight: 500;
+      margin-left: 4px;
+      vertical-align: super;
+    }
+
+    .yt-play-icon {
+      color: var(--yt-red);
+      font-size: 24px;
+      display: inline-block;
+    }
+
+    /* Youtube Style Search Bar */
+    .yt-center {
+      flex: 1;
+      max-width: 640px;
+      margin: 0 24px;
+    }
+
+    .yt-search-container {
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+
+    .yt-search-box {
+      display: flex;
+      flex: 1;
+      background-color: #121212;
+      border: 1px solid #303030;
+      border-right: none;
+      border-radius: 40px 0 0 40px;
+      padding: 0 16px;
+      height: 40px;
+      align-items: center;
+      transition: border 0.1s ease;
+    }
+
+    .yt-search-box:focus-within {
+      border: 1px solid #1c62b9;
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+    }
+
+    .yt-search-input {
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--yt-white);
+      width: 100%;
+      font-size: 16px;
+      font-weight: 400;
+    }
+
+    .yt-search-input::placeholder {
+      color: #858585;
+    }
+
+    .yt-search-btn {
+      background-color: #222222;
+      border: 1px solid #303030;
+      outline: none;
+      color: var(--yt-text);
+      width: 64px;
+      height: 40px;
+      border-radius: 0 40px 40px 0;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background-color 0.15s;
+    }
+
+    .yt-search-btn:hover {
+      background-color: #272727;
+    }
+
+    .yt-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .btn-action {
+      background: none;
+      border: 1px solid #303030;
+      color: var(--yt-text);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      transition: background-color 0.15s, border-color 0.15s;
+    }
+
+    .btn-action:hover {
+      background-color: #272727;
+      border-color: #4f4f4f;
+    }
+
+    .btn-action.primary {
+      background-color: var(--yt-white);
+      color: var(--yt-black);
+      border: none;
+    }
+
+    .btn-action.primary:hover {
+      background-color: #d9d9d9;
+    }
+
+    /* New Layout Styles for Sticky Left Navigation Sidebar */
+    .yt-layout {
+      max-width: 1750px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px;
+      display: flex;
+      gap: 24px;
+    }
+
+    .yt-left-nav {
+      width: 240px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      height: calc(100vh - 100px);
+      position: sticky;
+      top: 80px;
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+
+    .yt-left-nav::-webkit-scrollbar {
+      display: none;
+    }
+
+    .nav-divider {
+      height: 1px;
+      background-color: rgba(255, 255, 255, 0.08);
+      margin: 8px 0 8px 12px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      height: 40px;
+      padding: 0 12px;
+      border-radius: 8px;
+      text-decoration: none;
+      color: var(--yt-white);
+      font-size: 14px;
+      font-weight: 400;
+      transition: background-color 0.15s;
+    }
+
+    .nav-item:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .nav-item.active {
+      background-color: var(--yt-light-gray);
+      font-weight: 500;
+    }
+
+    .nav-item-icon {
+      font-size: 18px;
+      width: 24px;
+      text-align: center;
+    }
+
+    .nav-section-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--yt-muted);
+      padding: 8px 12px 4px;
+    }
+
+    .nav-sub-channel {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      height: 40px;
+      padding: 0 12px;
+      border-radius: 8px;
+      text-decoration: none;
+      color: var(--yt-white);
+      font-size: 13.5px;
+      transition: background-color 0.15s;
+    }
+
+    .nav-sub-channel:hover {
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .nav-channel-circ {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background-color: var(--yt-light-gray);
+      color: var(--yt-white);
+      font-weight: 700;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-transform: uppercase;
+    }
+
+    .yt-main-content {
+      flex: 1;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
+
+    @media (min-width: 1200px) {
+      .yt-main-content {
+        grid-template-columns: 1fr 400px;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .yt-left-nav {
+        display: none !important;
+      }
+    }
+
+    /* Left pane (Video display / Active search results) */
+    .yt-left-pane {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Video Viewport */
+    .viewport-box {
+      background-color: #000;
+      aspect-ratio: 16/9;
+      width: 100%;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .viewport-iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    /* Video Metadata details */
+    .video-details-box {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .vid-title-tag {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--yt-white);
+      line-height: 1.4;
+    }
+
+    .vid-actions-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 16px;
+    }
+
+    .creator-details {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .creator-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #cc1111, #880000);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      color: white;
+      font-size: 16px;
+    }
+
+    .creator-info {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .creator-name {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--yt-white);
+    }
+
+    .creator-subs {
+      font-size: 12px;
+      color: var(--yt-muted);
+    }
+
+    .btn-subscribe {
+      background-color: var(--yt-white);
+      color: var(--yt-black);
+      border: none;
+      outline: none;
+      padding: 0 16px;
+      height: 36px;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 18px;
+      cursor: pointer;
+      margin-left: 8px;
+      transition: background-color 0.15s;
+    }
+
+    .btn-subscribe:hover {
+      background-color: #d9d9d9;
+    }
+
+    /* Rating & Tools */
+    .metric-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .metric-bubble {
+      background-color: #272727;
+      border-radius: 18px;
+      padding: 0 16px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--yt-white);
+      user-select: none;
+    }
+
+    /* Video Description */
+    .desc-plate {
+      background-color: var(--yt-dark-gray);
+      border-radius: 12px;
+      padding: 12px;
+      font-size: 14px;
+      line-height: 1.6;
+      transition: background-color 0.15s;
+    }
+
+    .desc-plate:hover {
+      background-color: var(--yt-light-gray);
+    }
+
+    .desc-header {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 6px;
+      display: flex;
+      gap: 8px;
+    }
+
+    .desc-views {
+      color: var(--yt-white);
+    }
+
+    .desc-date {
+      color: var(--yt-muted);
+    }
+
+    .desc-content {
+      color: #e1e1e1;
+      white-space: pre-wrap;
+    }
+
+    /* Right Sidebar Up Next Column */
+    .yt-sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .sidebar-heading {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--yt-white);
+      letter-spacing: -0.2px;
+    }
+
+    .playlist-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .horizontal-item {
+      display: flex;
+      gap: 8px;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+    }
+
+    .item-thumbnail {
+      width: 140px;
+      aspect-ratio: 16/9;
+      border-radius: 8px;
+      background-color: #1a1a1a;
+      background-size: cover;
+      background-position: center;
+      position: relative;
+      flex-shrink: 0;
+      border: 1px solid rgba(255, 255, 255, 0.02);
+    }
+
+    .item-duration-flag {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      background-color: rgba(0,0,0,0.8);
+      color: white;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 1px 4px;
+      border-radius: 2px;
+    }
+
+    .item-details {
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    .item-title {
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.35;
+      color: var(--yt-white);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+
+    .item-channel {
+      font-size: 11px;
+      color: var(--yt-muted);
+      margin-bottom: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .item-views {
+      font-size: 11px;
+      color: var(--yt-muted);
+    }
+
+    /* ------------------------------------------------------------ */
+    /* ACTIVE SEARCH RESULTS PANEL LAYOUT */
+    /* ------------------------------------------------------------ */
+    .yt-search-results-panel {
+      display: none; /* Block when search is active */
+      flex-direction: column;
+      gap: 16px;
+      width: 100%;
+    }
+
+    .search-meta-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid #272727;
+      padding-bottom: 12px;
+      margin-bottom: 10px;
+    }
+
+    .search-query-title {
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--yt-white);
+    }
+
+    .btn-back-to-video {
+      background-color: #272727;
+      color: var(--yt-white);
+      border: 1px solid #3f3f3f;
+      outline: none;
+      padding: 6px 14px;
+      border-radius: 18px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: background-color 0.15s;
+    }
+
+    .btn-back-to-video:hover {
+      background-color: #3e3e3e;
+    }
+
+    .search-results-listing {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Large Search Result list Row item */
+    .search-video-row {
+      display: flex;
+      gap: 16px;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 8px;
+      transition: background-color 0.15s;
+    }
+
+    .search-video-row:hover {
+      background-color: #1c1c1c;
+    }
+
+    .row-thumbnail {
+      width: 260px;
+      aspect-ratio: 16/9;
+      background-size: cover;
+      background-position: center;
+      background-color: #181c1e;
+      border-radius: 8px;
+      position: relative;
+      flex-shrink: 0;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .row-duration-flag {
+      position: absolute;
+      bottom: 6px;
+      right: 6px;
+      background-color: rgba(0, 0, 0, 0.85);
+      color: white;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: 3px;
+    }
+
+    .row-details {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-width: 0;
+      justify-content: flex-start;
+      padding-top: 4px;
+    }
+
+    .row-title {
+      font-size: 18px;
+      font-weight: 400;
+      color: var(--yt-white);
+      margin-bottom: 4px;
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .row-title:hover {
+      text-decoration: underline;
+    }
+
+    .row-stats-row {
+      font-size: 12px;
+      color: var(--yt-muted);
+      margin-bottom: 12px;
+    }
+
+    .row-channel-block {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .row-channel-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background-color: #555;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: bold;
+      color: white;
+    }
+
+    .row-channel-name {
+      font-size: 13px;
+      color: var(--yt-muted);
+      font-weight: 500;
+    }
+
+    .row-channel-verified {
+      background-color: var(--yt-muted);
+      color: var(--yt-black);
+      font-size: 8px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .row-summary {
+      font-size: 12px;
+      color: var(--yt-muted);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    /* Home Grid Pane Styles with Categories Bar & Shorts */
+    .yt-categories-bar {
+      display: flex;
+      gap: 12px;
+      overflow-x: auto;
+      padding: 4px 0 16px;
+      scrollbar-width: none;
+      white-space: nowrap;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      margin-bottom: 12px;
+    }
+
+    .yt-categories-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .category-tag {
+      display: inline-block;
+      background-color: var(--yt-light-gray);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--yt-text);
+      font-size: 13.5px;
+      font-weight: 500;
+      padding: 6px 14px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.15s, color 0.15s;
+    }
+
+    .category-tag:hover {
+      background-color: #3f3f3f;
+    }
+
+    .category-tag.active {
+      background-color: var(--yt-white);
+      color: var(--yt-black);
+      border-color: var(--yt-white);
+    }
+
+    .home-grid-pane {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 10px 0;
+    }
+    
+    .home-heading {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--yt-white);
+      margin-bottom: 8px;
+    }
+    
+    .home-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 24px;
+    }
+
+    .blank-state-grid-override {
+      display: block;
+      width: 100%;
+    }
+    
+    .grid-item {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      text-decoration: none;
+      color: inherit;
+    }
+    
+    .grid-item:hover .grid-thumbnail {
+      transform: scale(1.02);
+    }
+    
+    .grid-thumbnail-box {
+      width: 100%;
+      aspect-ratio: 16/9;
+      border-radius: 12px;
+      position: relative;
+      overflow: hidden;
+      background-color: #222;
+    }
+    
+    .grid-thumbnail {
+      width: 100%;
+      height: 100%;
+      background-size: cover;
+      background-position: center;
+      transition: transform 0.2s ease;
+    }
+    
+    .grid-duration {
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      background-color: rgba(0, 0, 0, 0.8);
+      color: #fff;
+      padding: 3px 6px;
+      font-size: 11px;
+      font-weight: 500;
+      border-radius: 4px;
+    }
+    
+    .grid-meta {
+      display: flex;
+      gap: 12px;
+    }
+    
+    .grid-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background-color: var(--yt-red);
+      color: var(--yt-white);
+      font-weight: bold;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    
+    .grid-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      flex: 1;
+      min-width: 0;
+    }
+    
+    .grid-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--yt-white);
+      line-height: 1.4;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    
+    .grid-channel {
+      font-size: 12px;
+      color: var(--yt-muted);
+    }
+    
+    .grid-channel:hover {
+      color: var(--yt-white);
+      text-decoration: underline;
+    }
+    
+    .grid-details {
+      font-size: 12px;
+      color: var(--yt-muted);
+    }
+
+    /* Channel View Pane Styles */
+    .channel-view-pane {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      padding: 10px 0;
+    }
+
+    .channel-banner {
+      width: 100%;
+      height: 180px;
+      border-radius: 16px;
+      background-size: cover;
+      background-position: center;
+      background-color: #222;
+    }
+
+    .channel-header {
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+      padding: 10px 0;
+      border-bottom: 1px solid #222;
+    }
+
+    .channel-big-avatar {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background-color: var(--yt-red);
+      color: var(--yt-white);
+      font-size: 32px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .channel-meta-info {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .channel-title-heading {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--yt-white);
+      margin: 0;
+    }
+
+    .channel-sub-stats {
+      font-size: 14px;
+      color: var(--yt-muted);
+    }
+
+    .channel-biography {
+      font-size: 13px;
+      color: #aaa;
+      line-height: 1.5;
+      max-width: 800px;
+    }
+
+    .channel-tabs {
+      display: flex;
+      gap: 16px;
+      border-bottom: 1px solid #1c1c1c;
+      padding-bottom: 1px;
+    }
+
+    .channel-tab-btn {
+      background: none;
+      border: none;
+      color: var(--yt-muted);
+      font-size: 15px;
+      font-weight: 600;
+      padding: 12px 16px;
+      cursor: pointer;
+      position: relative;
+      transition: color 0.15s ease;
+    }
+
+    .channel-tab-btn:hover {
+      color: var(--yt-white);
+    }
+
+    .channel-tab-btn.active {
+      color: var(--yt-white);
+    }
+
+    .channel-tab-btn.active::after {
+      content: "";
+      position: absolute;
+      bottom: 0;
+      left: 16px;
+      right: 16px;
+      height: 3px;
+      background-color: var(--yt-white);
+      border-radius: 2px 2px 0 0;
+    }
+
+    .channel-videos-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 20px;
+      padding-top: 10px;
+    }
+
+    /* Channel Search Card Inside Search Results List */
+    .search-channel-card {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      background-color: #0d0d0d;
+      border: 1px solid #1a1a1a;
+      border-radius: 12px;
+      padding: 20px;
+      cursor: pointer;
+      margin-bottom: 24px;
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .search-channel-card:hover {
+      background-color: #121212;
+      border-color: #333;
+    }
+
+    .channel-card-avatar {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      background-color: var(--yt-red);
+      color: var(--yt-white);
+      font-size: 24px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .channel-card-info {
+      flex: 1;
+    }
+
+    .channel-card-info h3 {
+      font-size: 18px;
+      font-weight: 600;
+      color: var(--yt-white);
+      margin: 0 0 4px 0;
+    }
+
+    .channel-card-info p {
+      font-size: 13px;
+      color: var(--yt-muted);
+      margin: 0;
+    }
+
+    .channel-card-btn {
+      background-color: var(--yt-white);
+      color: var(--yt-black);
+      border: none;
+      padding: 8px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 18px;
+      cursor: pointer;
+      transition: background-color 0.1s ease;
+    }
+
+    .channel-card-btn:hover {
+      background-color: #e0e0e0;
+    }
+
+    /* Sandbox Tag Notification Overlay */
+    .sandbox-tag-box {
+      background-color: rgba(255, 0, 0, 0.08);
+      border: 1px solid rgba(255, 0, 0, 0.2);
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 12px;
+      color: #ffa1a1;
+      line-height: 1.5;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .sandbox-logo {
+      font-size: 18px;
+    }
+
+    /* Loading state */
+    .loading-pulse {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 60px 0;
+      color: var(--yt-muted);
+      font-size: 15px;
+    }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 3px solid #333;
+      border-top-color: var(--yt-red);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header class="yt-header">
+    <div class="yt-left">
+      <a href="/view" class="yt-logo" onclick="event.preventDefault(); loadHomeView();" title="Xena Premium Video Hub" style="display: flex; align-items: center; gap: 6px; text-decoration: none;">
+        <svg viewBox="0 0 24 24" style="width: 28px; height: 28px; fill: #ff0000; flex-shrink: 0;"><path d="M23.498 6.163c-.272-.997-1.055-1.78-2.052-2.052C19.68 3.5 12 3.5 12 3.5s-7.68 0-9.446.611c-.997.272-1.78 1.055-2.052 2.052C0 7.93 0 12 0 12s0 4.07.611 5.837c.272.997 1.055 1.78 2.052 2.052C4.32 20.5 12 20.5 12 20.5s7.68 0 9.446-.611c.997-.272 1.78-1.055 2.052-2.052.611-1.767.611-5.837.611-5.837s0-4.07-.611-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"></path></svg>
+        <span style="font-family: 'Roboto', sans-serif; font-size: 19px; font-weight: 700; letter-spacing: -0.8px; color: #ffffff; display: flex; align-items: center;">Xena<span style="font-size: 10px; color: #aaaaaa; font-weight: 500; margin-left: 3px; align-self: flex-start; margin-top: 1px;">GB</span></span>
+      </a>
+    </div>
+
+    <!-- Wide central YouTube search block -->
+    <div class="yt-center">
+      <form class="yt-search-container" id="ytSearchForm">
+        <div class="yt-search-box">
+          <input 
+            type="text" 
+            id="ytSearchInput" 
+            class="yt-search-input" 
+            placeholder="Search YouTube or Enter URL..."
+            spellcheck="false"
+            autocomplete="off"
+            required
+          />
+        </div>
+        <button type="submit" class="yt-search-btn" title="Search">
+          <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: currentColor;">
+            <path d="M20.87,20.17l-5.59-5.59C16.35,13.35,17,11.75,17,10c0-3.87-3.13-7-7-7S3,6.13,3,10s3.13,7,7,7c1.75,0,3.35-0.65,4.58-1.71l5.59,5.59,0.71-0.71ZM10,16c-3.31,0-6-2.69-6-6s2.69-6,6-6,6,2.69,6,6-2.69,6-6,6Z"></path>
+          </svg>
+        </button>
+      </form>
+    </div>
+
+    <div class="yt-right">
+      <a href="/" class="btn-action primary" title="Exit Player and Return to Home Board">
+        Exit Player ⌂
+      </a>
+    </div>
+  </header>
+
+  <!-- LAYOUT -->
+  <main class="yt-layout">
+    <!-- LEFT STICKY NAVIGATION BAR (NATIVE DESIGN) -->
+    <aside class="yt-left-nav">
+      <a href="/view" id="leftNavHomeBtn" class="nav-item active" onclick="event.preventDefault(); loadHomeView();">
+        <span class="nav-item-icon">🏠</span>
+        <span>Home</span>
+      </a>
+      <a href="#" id="leftNavShortsBtn" class="nav-item" onclick="event.preventDefault(); loadShortsFeed();">
+        <span class="nav-item-icon">⚡</span>
+        <span>Shorts</span>
+      </a>
+      <a href="#" class="nav-item" onclick="event.preventDefault(); loadHomeView();">
+        <span class="nav-item-icon">📺</span>
+        <span>Subscriptions</span>
+      </a>
+      
+
+      <div class="nav-divider"></div>
+
+      <div class="nav-section-title">You</div>
+      <a href="#" class="nav-item" onclick="event.preventDefault(); alert('Your Channel is only accessible under secure authenticated Google accounts.');">
+        <span class="nav-item-icon">👤</span>
+        <span>Your channel</span>
+      </a>
+      <a href="#" id="leftNavHistoryBtn" class="nav-item" onclick="event.preventDefault(); loadHistoryView();">
+        <span class="nav-item-icon">⏰</span>
+        <span>History</span>
+      </a>
+      <a href="#" class="nav-item" onclick="event.preventDefault(); alert('Playback playlists synced internally.');">
+        <span class="nav-item-icon">📁</span>
+        <span>Playlists</span>
+      </a>
+      <a href="#" class="nav-item" onclick="event.preventDefault(); alert('Added to watch later list.');">
+        <span class="nav-item-icon">🕒</span>
+        <span>Watch Later</span>
+      </a>
+      <a href="#" class="nav-item" onclick="event.preventDefault(); alert('Content Liked and Synced with sandbox profile.');">
+        <span class="nav-item-icon">👍</span>
+        <span>Liked videos</span>
+      </a>
+    </aside>
+
+    <!-- MAIN TWO COLUMN VIEWER CONTAINER -->
+    <div class="yt-main-content">
+
+      <!-- LEFT SIDEBAR: ACTIVE WATCH STREAM OR SEARCH RESULTS -->
+      <div class="yt-left-pane">
+      
+      <!-- Safe intercept diagnostics notice -->
+      <div class="sandbox-tag-box">
+        <span class="sandbox-logo">🛡️</span>
+        <div>
+          <strong>Privacy Sandbox Enabled:</strong> Directly fetching clean streaming feeds blocks frame-busters, tracking telemetry, advertisement tracking grids, and heavy client-side JavaScript. Content streams freely with maximum native hardware acceleration.
+        </div>
+      </div>
+
+      <!-- Loading screen -->
+      <div class="loading-pulse" id="loadingWidget">
+        <div class="spinner"></div>
+        <span>Scraping clean streams list from YouTube...</span>
+      </div>
+
+      <!-- ACTIVE WATCH LAYOUT INNER PANELS -->
+      <div id="activeWatchLayout" style="display: flex; flex-direction: column; gap: 16px;">
+        <!-- Embedded Video Player -->
+        <div class="viewport-box">
+          <iframe 
+            id="mainIframePlayer"
+            class="viewport-iframe"
+            src=""
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture;" 
+            allowfullscreen
+          ></iframe>
+        </div>
+
+        <!-- Video Metadata / Bottom Plate -->
+        <div class="video-details-box">
+          <h1 class="vid-title-tag" id="mainVideoTitle">Loading compatible streaming media...</h1>
+          
+          <div class="vid-actions-bar">
+            <div class="creator-details">
+              <div class="creator-avatar" id="creatorAvatar">YT</div>
+              <div class="creator-info">
+                <span class="creator-name" id="mainChannelName" onclick="loadChannelView(this.textContent)" style="cursor: pointer; text-decoration: underline;" title="Visit YouTuber Profile Account">Compatible Stream</span>
+                <span class="creator-subs" id="creatorSubs">Sandbox Mode</span>
+              </div>
+              <button class="btn-subscribe" id="subBtn" onclick="alert('Subscribed in Sandbox Local Storage Cache!')">Subscribe</button>
+            </div>
+
+            <div class="metric-actions">
+              <div class="metric-bubble">
+                <span>👍 <span id="likesCount">142K</span></span>
+              </div>
+              <div class="metric-bubble">
+                <span id="videoDurationLabel">LIVE</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Decoupled sandbox description card -->
+          <div class="desc-plate">
+            <div class="desc-header">
+              <span class="desc-views" id="videoViewsMetric">Loading views</span>
+              <span class="desc-date" id="videoTimeMetric">Live Session</span>
+            </div>
+            <p class="desc-content" id="videoDescParagraph">
+              This standalone sandbox compatibility layout bypasses client-side storage cookies and trackers. Media streams natively inside XENA with isolated sandbox protocols.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- HOME RECOMMENDATIONS PANE -->
+      <div id="homePane" class="home-grid-pane" style="display: none;">
+        <!-- Categories horizontal tags toolbar -->
+        <div class="yt-categories-bar" id="categoriesBar"></div>
+
+        <h2 class="home-heading flex items-center gap-2">
+          <span>Recommended Feed</span>
+        </h2>
+        
+        <div class="home-grid" id="homeRecommendedGrid">
+          <!-- Populated dynamically -->
+        </div>
+
+        <!-- Dynamic Shorts Shelf Container (Portrait Grid) -->
+        <div class="shorts-shelf-container" id="homeShortsShelf" style="margin-top: 24px; margin-bottom: 24px; border-top: 1px solid rgba(255, 255, 255, 0.08); border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding: 24px 0;">
+          <h2 class="home-heading" style="font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+            <span style="color: var(--yt-red); font-size: 20px;">⚡</span>
+            <span>Shorts Shelf</span>
+          </h2>
+          <div class="shorts-grid">
+            <!-- Portrai Short Cards populated by JS -->
+          </div>
+        </div>
+
+        <h2 class="home-heading">Trending Mixes</h2>
+        <div class="home-grid" id="homeRecommendedGrid2">
+          <!-- Populated dynamically (videos 5-10) -->
+        </div>
+      </div>
+
+      <!-- CHANNEL OVERVIEW PANE -->
+      <div id="channelPane" class="channel-view-pane" style="display: none;">
+        <div id="channelBanner" class="channel-banner"></div>
+        <div class="channel-header">
+          <div class="channel-big-avatar" id="channelBigAvatar">YT</div>
+          <div class="channel-meta-info">
+            <h1 class="channel-title-heading" id="channelTitleHeading">Loading Channel...</h1>
+            <div class="channel-sub-stats">
+              <span id="channelHandle">@handle</span> &bull; 
+              <span id="channelSubscribersCount">1.2M subscribers</span> &bull; 
+              <span id="channelVideosCount">120 videos</span>
+            </div>
+            <p class="channel-biography" id="channelBiography">Loading description...</p>
+          </div>
+        </div>
+
+        <div class="channel-tabs">
+          <button class="channel-tab-btn active" id="recentlyPostedTabBtn" onclick="switchChannelTab('recent')">Recently Posted</button>
+          <button class="channel-tab-btn" id="mostPopularTabBtn" onclick="switchChannelTab('popular')">Most Popular</button>
+        </div>
+
+        <div class="channel-videos-grid" id="channelVideosGrid">
+          <!-- Loaded dynamically -->
+        </div>
+      </div>
+
+      <!-- THE AWESOME SEARCH RESULTS PANELS (Looks exactly like YouTube.com!) -->
+      <div class="yt-search-results-panel" id="searchResultsPanel">
+        <div class="search-meta-header">
+          <h2 class="search-query-title" id="searchQueryLabel">YouTube Search Results</h2>
+          <button class="btn-back-to-video" onclick="restoreActiveWatchLayout()" title="Return to currently playing video stream">
+            &larr; Back to Playing
+          </button>
+        </div>
+
+        <div class="search-results-listing" id="searchResultsListing">
+          <!-- Populated from AJAX YouTube search API in real-time -->
+        </div>
+      </div>
+
+      <!-- WATCH HISTORY PANE -->
+      <div class="yt-search-results-panel" id="historyPane" style="display: none; padding-top: 10px;">
+        <div class="search-meta-header" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 16px; margin-bottom: 24px; width: 100%;">
+          <h2 class="search-query-title" style="color: #ffffff; font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 8px;">
+            <span style="color: #3ea6ff;">⏰</span> Watch History
+          </h2>
+          <button class="btn-back-to-video" onclick="clearWatchHistoryLocal()" style="background: rgba(255,0,0,0.1); border: 1px solid rgba(255,0,0,0.25); color: #ff5555; padding: 6px 14px; border-radius: 18px; font-size: 11px; font-weight: 600; cursor: pointer; transition: background 0.15s; outline: none;">
+            Clear History
+          </button>
+        </div>
+        <div class="search-results-listing" id="historyListing" style="display: flex; flex-direction: column; gap: 16px; width: 100%;">
+          <!-- Loaded from LocalStorage -->
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT SIDEBAR: UP NEXT COLUMN (Matches YouTube design!) -->
+    <div class="yt-sidebar">
+      <h3 class="sidebar-heading">Up Next</h3>
+      
+      <div class="playlist-list" id="sidebarQueue">
+        <!-- populated elements -->
+      </div>
+    </div>
+
+    </div> <!-- END YT MAIN CONTENT WRAPPER -->
+  </main>
+
+  <script>
+    // Local static suggestions to fill layout on initial load or empty searches
+    const samplePlaylist = [
+      {
+        id: "w7ejDZ8dBj8",
+        title: "Lofi Hip Hop Radio &mdash; Beats to Relax, Study and Code to",
+        channel: "Lofi Girl Studio",
+        duration: "1:00:20",
+        views: "4.2M views",
+        thumbnail: "https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=300&auto=format&fit=crop"
+      },
+      {
+        id: "4xDzrJKXOOY",
+        title: "Chill Synthwave Ambient & Study coding Mix - Retro Cyberpunk Waves",
+        channel: "Cosmic Audio Waves",
+        duration: "1:42:05",
+        views: "142K views",
+        thumbnail: "https://images.unsplash.com/photo-1542831371-29b0f74f9713?w=300&auto=format&fit=crop"
+      },
+      {
+        id: "tGbFn9K668g",
+        title: "NASA Tour of the International Space Station (ISS)",
+        channel: "NASA Space Explorations",
+        duration: "25:05",
+        views: "12M views",
+        thumbnail: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=300&auto=format&fit=crop"
+      },
+      {
+        id: "M576u_V_s0Y",
+        title: "Deep Mountain Forest 4K Atmosphere & Binaural Soundscapes relaxation",
+        channel: "Nature Harmony Channels",
+        duration: "3:00:00",
+        views: "890K views",
+        thumbnail: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=300&auto=format&fit=crop"
+      },
+      {
+        id: "zOjov-2OZ0E",
+        title: "Harvard CS50 - Full Computer Science Foundations Introductory Tutorial",
+        channel: "Harvard University Online",
+        duration: "2:15:30",
+        views: "5.1M views",
+        thumbnail: "https://images.unsplash.com/photo-1504639725590-34d0984388bd?w=300&auto=format&fit=crop"
+      },
+      {
+        id: "E9e120_gDRE",
+        title: "Late Night Aesthetics - Calming Ambient Programming Music",
+        channel: "Hacker Vibes Core",
+        duration: "58:40",
+        views: "94K views",
+        thumbnail: "https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=300&auto=format&fit=crop"
+      }
+    ];
+
+    let currentVideoId = "";
+
+    // Parse URL parameter
+    function getQueryParam(name) {
+      const results = new RegExp('[\?&]' + name + '=([^&#]*)').exec(window.location.href);
+      return results ? decodeURIComponent(results[1]) : null;
+    }
+
+    function base64UrlEncode(str) {
+      try {
+        return btoa(unescape(encodeURIComponent(str)))
+          .replace(/\+/g, '-')
+          .replace(/\//g, '_')
+          .replace(/=+$/g, '');
+      } catch(e) { return encodeURIComponent(str); }
+    }
+
+    function isProbablyUrl(text) {
+      const t = text.trim();
+      if (!t) return false;
+      if (/^https?:\/\//i.test(t)) return true;
+      return /^[a-z0-9.-]+\.[a-z]{2,}(\/.*)?$/i.test(t);
+    }
+
+     function normalizeInputToUrl(input) {
+       const raw = input.trim();
+       if (!raw) return 'https://duckduckgo.com/';
+       if (/^https?:\/\//i.test(raw)) return raw;
+       if (isProbablyUrl(raw)) return 'https://' + raw;
+       return 'https://duckduckgo.com/?q=' + encodeURIComponent(raw);
+     }
+
+    function getYoutubeVideoId(urlStr) {
+      try {
+        const url = new URL(urlStr);
+        if (url.hostname.includes("youtube") || url.hostname.includes("youtu.be")) {
+          let v = url.searchParams.get("v");
+          if (!v && url.hostname.includes("youtu.be")) {
+            v = url.pathname.replace(/^\//, "").split("?")[0];
+          }
+          return v;
+        }
+      } catch (e) {
+        const watchMatch = urlStr.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?/\s]+)/i);
+        if (watchMatch) return watchMatch[1];
+      }
+      return null;
+    }
+
+    // Populate Sidebar Queues
+    function renderSidebarQueue(videosList) {
+      const sidebarQueue = document.getElementById("sidebarQueue");
+      sidebarQueue.innerHTML = "";
+      
+      const pool = videosList && videosList.length > 0 ? videosList : samplePlaylist;
+      
+      pool.forEach(item => {
+        // Exclude current video from queue to avoid repeat
+        if (item.id === currentVideoId) return;
+
+        const link = document.createElement("a");
+        link.className = "horizontal-item";
+        link.href = `/view?v=${item.id}`;
+        link.onclick = (e) => {
+          e.preventDefault();
+          loadActiveVideo(item.id, item.title, item.channel, item.duration, item.views, item.published || "Live Session");
+          window.history.pushState(null, "", `/view?v=${item.id}`);
+        };
+
+        link.innerHTML = `
+          <div class="item-thumbnail" style="background-image: url('${item.thumbnail}')">
+            <span class="item-duration-flag">${item.duration || "9:40"}</span>
+          </div>
+          <div class="item-details">
+            <span class="item-title">${item.title}</span>
+            <span class="item-channel">${item.channel}</span>
+            <span class="item-views">${item.views || "100K views"}</span>
+          </div>
+        `;
+        sidebarQueue.appendChild(link);
+      });
+    }
+
+    // Load active video inside iframe player
+    function loadActiveVideo(id, title, channel, duration, viewsCount, timePublished) {
+      if (!id) {
+        id = "w7ejDZ8dBj8"; // default lofi hip hop (recorded video)
+      }
+
+      currentVideoId = id;
+      
+      const mainPlayer = document.getElementById("mainIframePlayer");
+      mainPlayer.src = `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&rel=0&modestbranding=1&showinfo=0`;
+
+      // Set Title with nice matching details
+      document.getElementById("mainVideoTitle").innerHTML = title || "Premium Compatible Media Stream";
+      document.getElementById("mainChannelName").textContent = channel || "Universal Stream Host";
+      
+      const shortCode = (channel || "YT").substring(0, 2).toUpperCase();
+      document.getElementById("creatorAvatar").textContent = shortCode;
+
+      document.getElementById("videoViewsMetric").textContent = viewsCount || "102,401 views";
+      document.getElementById("videoTimeMetric").textContent = timePublished || "Stream Online Session";
+      document.getElementById("videoDurationLabel").textContent = duration || "HD 1080P";
+
+      const matchedStatic = samplePlaylist.find(v => v.id === id);
+      if (matchedStatic) {
+        document.getElementById("videoDescParagraph").textContent = `Playing sandboxed media stream [ID: ${id}] supplied by channel [${channel || matchedStatic.channel}]. Enjoy ad-free compatibility playback inside secure XENA networks.`;
+      } else {
+        document.getElementById("videoDescParagraph").textContent = `YouTube Compatible Stream successfully hooked inside XENA sandbox proxy player under client connection node. Tracking scripts, advertisement cookies, and dynamic tracing code are blocked for speed.`;
+      }
+
+      // Save to watch history locally
+      saveToWatchHistory({
+        id: id,
+        title: title || matchedStatic?.title || "Premium Compatible Media Stream",
+        channel: channel || matchedStatic?.channel || "Universal Stream Host",
+        duration: duration || matchedStatic?.duration || "HD 1080P",
+        views: viewsCount || matchedStatic?.views || "102K views",
+        published: timePublished || matchedStatic?.published || "Stream Online Session",
+        thumbnail: `https://img.youtube.com/vi/${id}/mqdefault.jpg`
+      });
+
+      restoreActiveWatchLayout();
+      renderSidebarQueue(samplePlaylist);
+    }
+
+    let currentChannelData = null; // Store active channel state for switching tabs
+
+    // Hide all view panes
+    function hideAllPanes() {
+      document.getElementById("activeWatchLayout").style.display = "none";
+      document.getElementById("searchResultsPanel").style.display = "none";
+      document.getElementById("homePane").style.display = "none";
+      document.getElementById("channelPane").style.display = "none";
+      document.getElementById("loadingWidget").style.display = "none";
+      const hPane = document.getElementById("historyPane");
+      if (hPane) hPane.style.display = "none";
+    }
+
+    // Categories Tags List matching native YouTube
+    const categoriesList = [
+      "All", "Gaming", "Audio commentaries", "Music", "Mixes", 
+      "Apple", "Podcasts", "Desktop computers", "Law enforcement", 
+      "Restaurants", "Feature Phones", "Action-adventure games", "Comedy", "Vocal Music"
+    ];
+
+    function renderCategories() {
+      const container = document.getElementById("categoriesBar");
+      if (!container) return;
+      container.innerHTML = "";
+      
+      categoriesList.forEach((cat, idx) => {
+        const span = document.createElement("span");
+        span.className = "category-tag" + (idx === 0 ? " active" : "");
+        span.textContent = cat;
+        span.onclick = async () => {
+          document.querySelectorAll(".category-tag").forEach(el => el.classList.remove("active"));
+          span.classList.add("active");
+          
+          if (cat === "All") {
+            loadHomeView();
+          } else {
+            document.getElementById("ytSearchInput").value = cat;
+            const formObj = document.getElementById("ytSearchForm");
+            formObj.dispatchEvent(new Event("submit"));
+          }
+        };
+        container.appendChild(span);
+      });
+    }
+
+    // Portrait Shorts List matching requirements (cleared)
+    const sampleShorts = [];
+
+    function renderShorts() {
+      const parent = document.querySelector(".shorts-grid");
+      if (!parent) return;
+      parent.innerHTML = `
+        <div style="grid-column: 1/-1; padding: 32px; text-align: center; border: 1px dashed rgba(255,255,255,0.06); border-radius: 12px; background: rgba(0,0,0,0.2);">
+          <span style="font-size: 28px; display: block; margin-bottom: 8px;">🧘</span>
+          <h4 style="color: #ffffff; font-size: 14px; font-weight: 600; margin-bottom: 4px;">Attention Span Protection Active</h4>
+          <p style="color: #888888; font-size: 11px; margin: 0; max-width: 320px; display: inline-block; line-height: 1.4;">Xena intercepts and filters doomscrolling feeds to keep your focus sharp and your network usage light.</p>
+        </div>
+      `;
+    }
+
+    function loadShortsFeed() {
+      // Highlight Shorts active state in Left Navigation Sidebar
+      document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
+      document.getElementById("leftNavShortsBtn").classList.add("active");
+
+      hideAllPanes();
+      document.getElementById("searchResultsPanel").style.display = "flex";
+      document.getElementById("searchQueryLabel").innerHTML = `⚡ Distraction-Free Shorts Guard`;
+      
+      const listing = document.getElementById("searchResultsListing");
+      listing.innerHTML = `
+        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 80px 24px; width: 100%;">
+          <div style="width: 80px; height: 80px; border-radius: 50%; background: rgba(62, 166, 255, 0.08); display: flex; align-items: center; justify-content: center; margin-bottom: 20px; border: 1px solid rgba(62, 166, 255, 0.15);">
+            <span style="font-size: 32px;">🛡️</span>
+          </div>
+          <h2 style="font-family: 'Roboto', sans-serif; font-size: 20px; font-weight: 700; color: #ffffff; margin-bottom: 8px; margin-top: 0; letter-spacing: -0.4px;">Shorts Blocked</h2>
+          <p style="font-family: 'Roboto', sans-serif; font-size: 13px; color: #888888; max-width: 440px; line-height: 1.5; margin: 0;">
+            Shorts-form feeds are disabled in secure educational player mode to optimize performance, prevent doomscrolling tracking, and maximize focus efficiency. Use search to view clean, targeted learning content instead.
+          </p>
+        </div>
+      `;
+    }
+
+    function createGridVideoItem(video) {
+      const gridItem = document.createElement("a");
+      gridItem.className = "grid-item";
+      gridItem.href = `/view?v=${video.id}`;
+      gridItem.onclick = (e) => {
+        e.preventDefault();
+        loadActiveVideo(video.id, video.title, video.channel, video.duration, video.views, video.published || "Recently");
+        window.history.pushState(null, "", `/view?v=${video.id}`);
+      };
+      
+      const avatarChar = (video.channel || "YT").charAt(0).toUpperCase();
+      gridItem.innerHTML = `
+        <div class="grid-thumbnail-box">
+          <div class="grid-thumbnail" style="background-image: url('${video.thumbnail}')"></div>
+          <span class="grid-duration">${video.duration || "HD"}</span>
+        </div>
+        <div class="grid-meta">
+          <div class="grid-avatar">${avatarChar}</div>
+          <div class="grid-info">
+            <h3 class="grid-title">${video.title}</h3>
+            <span class="grid-channel" onclick="event.preventDefault(); event.stopPropagation(); loadChannelView('${video.channel.replace(/'/g, "\\'")}')">${video.channel}</span>
+            <span class="grid-details">${video.views || "102K views"} &bull; ${video.published || "Recently"}</span>
+          </div>
+        </div>
+      `;
+      return gridItem;
+    }
+
+    // LocalStorage helper utilities for Recommendations and History
+    function getRecommendedFromStorage() {
+      try {
+        const stored = localStorage.getItem("xena_yt_recommended");
+        return stored ? JSON.parse(stored) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function setRecommendedInStorage(videos) {
+      try {
+        localStorage.setItem("xena_yt_recommended", JSON.stringify(videos));
+      } catch (e) {
+        console.error("Storage save failed:", e);
+      }
+    }
+
+    function getWatchHistory() {
+      try {
+        const stored = localStorage.getItem("xena_yt_history");
+        return stored ? JSON.parse(stored) : [];
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveToWatchHistory(video) {
+      if (!video || !video.id) return;
+      try {
+        const history = getWatchHistory();
+        const filtered = history.filter(v => v.id !== video.id);
+        const updated = [video, ...filtered].slice(0, 50); // Cap history to 50 entries
+        localStorage.setItem("xena_yt_history", JSON.stringify(updated));
+      } catch (e) {
+        console.error("History save failed:", e);
+      }
+    }
+
+    // Load and populate the History Pane dynamically with storage items
+    function loadHistoryView() {
+      document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
+      const historyBtn = document.getElementById("leftNavHistoryBtn");
+      if (historyBtn) historyBtn.classList.add("active");
+
+      hideAllPanes();
+      
+      const historyPane = document.getElementById("historyPane");
+      const listing = document.getElementById("historyListing");
+      
+      historyPane.style.display = "block";
+      listing.innerHTML = "";
+      
+      const history = getWatchHistory();
+      
+      if (history && history.length > 0) {
+        history.forEach(video => {
+          const row = document.createElement("a");
+          row.className = "search-video-row";
+          row.href = `/view?v=${video.id}`;
+          row.onclick = (e) => {
+            e.preventDefault();
+            loadActiveVideo(video.id, video.title, video.channel, video.duration, video.views, video.published);
+            window.history.pushState(null, "", `/view?v=${video.id}`);
+          };
+
+          const firstLetter = (video.channel || "YT").charAt(0).toUpperCase();
+
+          row.innerHTML = `
+            <div class="row-thumbnail" style="background-image: url('${video.thumbnail || `https://img.youtube.com/vi/${video.id}/mqdefault.jpg`}')">
+              <span class="row-duration-flag">${video.duration || "HD"}</span>
+            </div>
+            <div class="row-details">
+              <h3 class="row-title">${video.title}</h3>
+              <div class="row-stats-row">${video.views || "102K views"} • ${video.published || "Stream session"}</div>
+              
+              <div class="row-channel-block" onclick="event.preventDefault(); event.stopPropagation(); loadChannelView('${video.channel.replace(/'/g, "\\'")}')" style="cursor: pointer;">
+                <div class="row-channel-avatar">${firstLetter}</div>
+                <span class="row-channel-name" style="text-decoration: underline;">${video.channel}</span>
+                <span class="row-channel-verified">✓</span>
+              </div>
+
+              <p class="row-summary">
+                Previously watched on your secure sandbox profile. Enjoy tracking-free, ad-free replay streamed instantly inside secure XENA scopes.
+              </p>
+            </div>
+          `;
+          listing.appendChild(row);
+        });
+      } else {
+        listing.innerHTML = `
+          <div style="text-align: center; color: var(--yt-muted); padding: 80px 0; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%;">
+            <span style="font-size: 36px; margin-bottom: 12px;">⏰</span>
+            <h3 style="color: #fff; font-size: 18px; margin-bottom: 8px;">Keep track of what you watch</h3>
+            <p style="font-size: 13px; max-width: 320px; line-height: 1.4; color: #888;">Watch history isn't available because you haven't watched any videos yet inside XENA.</p>
+          </div>
+        `;
+      }
+    }
+
+    function clearWatchHistoryLocal() {
+      if (confirm("Are you sure you want to clear your local watch history log?")) {
+        localStorage.removeItem("xena_yt_history");
+        loadHistoryView();
+      }
+    }
+
+    // Load and populate the Home Recommended grids and widgets
+    async function loadHomeView() {
+      // Highlight Home active state in Left Navigation Sidebar
+      document.querySelectorAll(".nav-item").forEach(el => el.classList.remove("active"));
+      document.getElementById("leftNavHomeBtn").classList.add("active");
+
+      hideAllPanes();
+      
+      const grid1 = document.getElementById("homeRecommendedGrid");
+      const grid2 = document.getElementById("homeRecommendedGrid2");
+      const trendingHeading = document.querySelector('h2.home-heading:nth-of-type(2)') || document.getElementById("homeTrendingHeading");
+      const shortsShelf = document.getElementById("homeShortsShelf");
+      
+      grid1.innerHTML = "";
+      grid2.innerHTML = "";
+      
+      // Get saved recommendations from LocalStorage
+      const recommended = getRecommendedFromStorage();
+      
+      document.getElementById("homePane").style.display = "flex";
+      renderCategories();
+      
+      if (recommended && recommended.length > 0) {
+        // We have personalized recommendation items! Render the full feed
+        if (trendingHeading) trendingHeading.style.display = "block";
+        if (shortsShelf) shortsShelf.style.display = "block";
+        grid2.style.display = "grid";
+        grid1.className = "home-grid"; // restore standard grid layout
+        
+        const recommended1 = recommended.slice(0, 4);
+        const recommended2 = recommended.slice(4, 16);
+        
+        recommended1.forEach(video => {
+          grid1.appendChild(createGridVideoItem(video));
+        });
+        
+        recommended2.forEach(video => {
+         grid2.appendChild(createGridVideoItem(video));
+        });
+        
+        renderShorts();
+        renderSidebarQueue(recommended);
+      } else {
+        // Redraw beautiful exact blank slate landing page in dark mode!
+        if (trendingHeading) trendingHeading.style.display = "none";
+        if (shortsShelf) shortsShelf.style.display = "none";
+        grid2.style.display = "none";
+        
+        // Use full-column block layout for single wide visual
+        grid1.className = "blank-state-grid-override";
+        grid1.innerHTML = `
+          <div class="blank-state-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; min-height: 48vh; text-align: center; padding: 40px 20px; box-sizing: border-box; grid-column: 1 / -1; margin: 0 auto;">
+            <div class="blank-icon-box" style="width: 108px; height: 108px; border-radius: 50%; border: 3px dashed #3a3a3a; display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
+              <svg viewBox="0 0 24 24" style="width: 44px; height: 44px; fill: #5c5c5c;"><path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"></path></svg>
+            </div>
+            <h2 style="font-family: 'Roboto', sans-serif; font-size: 24px; font-weight: 700; color: #ffffff; margin-bottom: 8px; margin-top: 0; letter-spacing: -0.4px;">Try searching to get started</h2>
+            <p style="font-family: 'Roboto', sans-serif; font-size: 14px; color: #888888; max-width: 420px; line-height: 1.5; margin: 0;">Start watching videos to help us build a feed of videos that you'll love.</p>
+          </div>
+        `;
+      }
+    }
+
+    // Load and populate the YouTuber's custom Channel view
+    async function loadChannelView(channelName) {
+      if (!channelName) return;
+      hideAllPanes();
+      document.getElementById("loadingWidget").style.display = "flex";
+
+      try {
+        const res = await fetch(`/api/yt/channel?name=${encodeURIComponent(channelName)}`);
+        const channelData = await res.json();
+        currentChannelData = channelData;
+
+        document.getElementById("loadingWidget").style.display = "none";
+        document.getElementById("channelPane").style.display = "flex";
+
+        // Set Banner and Info
+        document.getElementById("channelBanner").style.backgroundImage = `url('${channelData.banner}')`;
+        document.getElementById("channelBigAvatar").textContent = channelName.charAt(0).toUpperCase();
+        document.getElementById("channelTitleHeading").textContent = channelData.name;
+        document.getElementById("channelHandle").textContent = channelData.handle;
+        document.getElementById("channelSubscribersCount").textContent = channelData.subscribers;
+        document.getElementById("channelVideosCount").textContent = channelData.videosCount;
+        document.getElementById("channelBiography").textContent = channelData.bio;
+
+        // Default to recently posted videos tab
+        switchChannelTab("recent");
+      } catch (err) {
+        console.error("Failed to load channel details:", err);
+        document.getElementById("loadingWidget").style.display = "none";
+        restoreActiveWatchLayout();
+      }
+    }
+
+    // Switch between custom channel tabs ("Recently Posted" / "Most Popular")
+    function switchChannelTab(tabType) {
+      if (!currentChannelData) return;
+
+      const recentBtn = document.getElementById("recentlyPostedTabBtn");
+      const popularBtn = document.getElementById("mostPopularTabBtn");
+      const grid = document.getElementById("channelVideosGrid");
+      grid.innerHTML = "";
+
+      let list = [];
+      if (tabType === "popular") {
+        recentBtn.classList.remove("active");
+        popularBtn.classList.add("active");
+        list = currentChannelData.mostPopular || [];
+      } else {
+        recentBtn.classList.add("active");
+        popularBtn.classList.remove("active");
+        list = currentChannelData.recentlyPosted || [];
+      }
+
+      if (list.length > 0) {
+        list.forEach(video => {
+          const gridItem = document.createElement("a");
+          gridItem.className = "grid-item";
+          gridItem.href = `/view?v=${video.id}`;
+          gridItem.onclick = (e) => {
+            e.preventDefault();
+            loadActiveVideo(video.id, video.title, video.channel, video.duration, video.views, video.published || "Recently");
+            window.history.pushState(null, "", `/view?v=${video.id}`);
+          };
+
+          const avatarChar = (video.channel || "YT").charAt(0).toUpperCase();
+          gridItem.innerHTML = `
+            <div class="grid-thumbnail-box">
+              <div class="grid-thumbnail" style="background-image: url('${video.thumbnail}')"></div>
+              <span class="grid-duration">${video.duration || "HD"}</span>
+            </div>
+            <div class="grid-meta">
+              <div class="grid-avatar">${avatarChar}</div>
+              <div class="grid-info">
+                <h3 class="grid-title">${video.title}</h3>
+                <span class="grid-channel">${video.channel}</span>
+                <span class="grid-details">${video.views || "102K views"} &bull; ${video.published || "Recently"}</span>
+              </div>
+            </div>
+          `;
+          grid.appendChild(gridItem);
+        });
+      } else {
+        grid.innerHTML = `<div style="text-align: center; grid-column: 1/-1; color: var(--yt-muted); padding: 40px 0;">No videos found under this tab.</div>`;
+      }
+    }
+
+    // Hide search panel, show video watch panel and reset sibling panes
+    function restoreActiveWatchLayout() {
+      document.getElementById("searchResultsPanel").style.display = "none";
+      document.getElementById("homePane").style.display = "none";
+      document.getElementById("channelPane").style.display = "none";
+      document.getElementById("activeWatchLayout").style.display = "flex";
+      document.getElementById("loadingWidget").style.display = "none";
+    }
+
+    // Submit search internally to avoid DuckDuckGo redirect in YouTube core
+    const ytSearchForm = document.getElementById("ytSearchForm");
+    const ytSearchInput = document.getElementById("ytSearchInput");
+
+    ytSearchForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const val = ytSearchInput.value.trim();
+      if (!val) return;
+
+      const ytId = getYoutubeVideoId(val);
+      if (ytId) {
+        // Direct link submission - load immediately
+        loadActiveVideo(ytId);
+        window.history.pushState(null, "", `/view?v=${ytId}`);
+        ytSearchInput.value = "";
+        return;
+      }
+
+      // Check if it's a raw video ID
+      if (/^[a-zA-Z0-9_-]{11}$/.test(val)) {
+        loadActiveVideo(val);
+        window.history.pushState(null, "", `/view?v=${val}`);
+        ytSearchInput.value = "";
+        return;
+      }
+
+      // Check if it's an external web url - load outside YouTube in proxy
+      if (isProbablyUrl(val)) {
+        const normUrl = normalizeInputToUrl(val);
+        const encoded = base64UrlEncode(normUrl);
+        window.location.href = `/proxy/${encoded}/`;
+        return;
+      }
+
+      // Standard text search - Execute in-app API scrape!
+      document.getElementById("activeWatchLayout").style.display = "none";
+      document.getElementById("searchResultsPanel").style.display = "none";
+      document.getElementById("loadingWidget").style.display = "flex";
+
+      try {
+        const res = await fetch(`/api/yt/search?q=${encodeURIComponent(val)}`);
+        const videosData = await res.json();
+        
+        // Prepend these results to recommended list in local storage
+        if (videosData && videosData.length > 0) {
+          const currentRecs = getRecommendedFromStorage();
+          const filteredNew = videosData.filter(v => !currentRecs.some(cr => cr.id === v.id));
+          const updatedRecs = [...filteredNew, ...currentRecs];
+          setRecommendedInStorage(updatedRecs.slice(0, 40)); // keep up to 40 items
+        }
+
+        // Show Search Panel, Hide Loading
+        document.getElementById("loadingWidget").style.display = "none";
+        document.getElementById("searchResultsPanel").style.display = "flex";
+        document.getElementById("searchQueryLabel").textContent = `Search results for: "${val}"`;
+
+        const listing = document.getElementById("searchResultsListing");
+        listing.innerHTML = "";
+
+        if (videosData && videosData.length > 0) {
+          // Add a standalone YouTuber Channel search card at the absolute top of search results if matching
+          const uniqueChannels = [...new Set(videosData.map(v => v.channel))].filter(Boolean);
+          if (uniqueChannels.length > 0) {
+            const chName = uniqueChannels[0];
+            const chAvatarLetter = chName.charAt(0).toUpperCase();
+            const chCard = document.createElement("div");
+            chCard.className = "search-channel-card";
+            chCard.onclick = () => loadChannelView(chName);
+            chCard.innerHTML = `
+              <div class="channel-card-avatar">${chAvatarLetter}</div>
+              <div class="channel-card-info">
+                <h3>${chName}</h3>
+                <p>Official Sandbox Profile &bull; Verified Creator &bull; Click to Browse Feed</p>
+              </div>
+              <button class="channel-card-btn">Visit Channel</button>
+            `;
+            listing.appendChild(chCard);
+          }
+
+          // Render search results horizontal rows mimicking Google/YouTube.com list
+          videosData.forEach(video => {
+            const row = document.createElement("a");
+            row.className = "search-video-row";
+            row.href = `/view?v=${video.id}`;
+            row.onclick = (e) => {
+              e.preventDefault();
+              loadActiveVideo(video.id, video.title, video.channel, video.duration, video.views, video.published || "Live Session");
+              window.history.pushState(null, "", `/view?v=${video.id}`);
+            };
+
+            const firstLetter = (video.channel || "YT").charAt(0).toUpperCase();
+
+            row.innerHTML = `
+              <div class="row-thumbnail" style="background-image: url('${video.thumbnail}')">
+                <span class="row-duration-flag">${video.duration || "HD"}</span>
+              </div>
+              <div class="row-details">
+                <h3 class="row-title">${video.title}</h3>
+                <div class="row-stats-row">${video.views || "102K views"} • ${video.published || "Recently"}</div>
+                
+                <div class="row-channel-block" onclick="event.preventDefault(); event.stopPropagation(); loadChannelView('${video.channel.replace(/'/g, "\\'")}')" style="cursor: pointer;" title="Browse this YouTuber channel">
+                  <div class="row-channel-avatar">${firstLetter}</div>
+                  <span class="row-channel-name" style="text-decoration: underline;">${video.channel}</span>
+                  <span class="row-channel-verified" title="Verified Stream Source">✓</span>
+                </div>
+
+                <p class="row-summary">
+                  Enjoy safe compatible playing of this video inside XENA Player. Clicking this will instantly stream this file, blocking trace trackers and scripts.
+                </p>
+              </div>
+            `;
+            listing.appendChild(row);
+          });
+
+          // Also populate the sidebar queue with these search results for contextual next-up tracks!
+          renderSidebarQueue(videosData);
+        } else {
+          listing.innerHTML = `<div style="text-align: center; color: var(--yt-muted); padding: 40px 0;">No media packages found for "${val}". Please try another search term.</div>`;
+        }
+      } catch (err) {
+        console.error("Search fetch failed", err);
+        document.getElementById("loadingWidget").style.display = "none";
+        document.getElementById("searchResultsPanel").style.display = "flex";
+        document.getElementById("searchResultsListing").innerHTML = `<div style="text-align: center; color: var(--yt-red); padding: 40px 0;">Failed to establish connection to clean YouTube scrape API routing. Please reload page and try again.</div>`;
+      }
+
+      ytSearchInput.value = "";
+    });
+
+    // On-popstate handling (back/forward keys)
+    window.onpopstate = () => {
+      const v = getQueryParam("v");
+      loadActiveVideo(v);
+    };
+
+    // Bootstrap Boot
+    const bootVid = getQueryParam("v");
+    if (bootVid) {
+      loadActiveVideo(bootVid);
+    } else {
+      loadHomeView();
+    }
+
+  </script>
+</body>
+</html>
