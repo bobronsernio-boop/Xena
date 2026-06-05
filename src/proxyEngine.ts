@@ -1,18 +1,6 @@
-// User implements: handleProxy(req, res) and generateSW()
-// Export these two functions from this file.
-export async function handleProxy(req: any, res: any): Promise<void> {
-  // User will implement
-}
-
-export function generateSW(): string {
-  // User will implement
-  return "";
-}
-
 import * as cheerio from "cheerio";
 import { Request, Response } from "express";
 
-// Base64 URL-safe encoding
 function b64UrlEncode(value: string): string {
   return Buffer.from(String(value || ""), "utf8")
     .toString("base64")
