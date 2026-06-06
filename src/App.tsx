@@ -321,7 +321,11 @@ function StarryCanvas() {
 
 export default function App() {
   // Splash screen state control
-  const [showSplash, setShowSplash] = useState(true);
+ useEffect(() => {
+  setSplashFact(funFacts[Math.floor(Math.random() * funFacts.length)]);
+  const timer = setTimeout(() => setShowSplash(false), 2500);
+  return () => clearTimeout(timer);
+}, []);
 
   // Tabs management
   const [tabs, setTabs] = useState<Tab[]>(() => {
