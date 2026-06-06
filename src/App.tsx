@@ -596,19 +596,27 @@ export default function App() {
   }, []);
 
   // Persist Cloak Mode
-  useEffect(() => {
-    localStorage.setItem("xena_cloak", String(cloakActive));
-    if (cloakActive) {
-      document.title = "Google Classroom";
-      let link: any = document.querySelector("link[rel*='icon']");
-      if (!link) {
-        link = document.createElement("link");
-        link.type = "image/x-icon";
-        link.rel = "shortcut icon";
-        document.getElementsByTagName("head")[0].appendChild(link);
-      }
-      link.href = "https://ssl.gstatic.com/classroom/favicon.png";
-    } else {
+ useEffect(() => {
+  localStorage.setItem("xena_cloak", String(cloakActive));
+  if (cloakActive) {
+    document.title = "MathsTutoring";
+    let link: any = document.querySelector("link[rel*='icon']");
+    if (!link) {
+      link = document.createElement("link");
+      link.type = "image/x-icon";
+      link.rel = "shortcut icon";
+      document.getElementsByTagName("head")[0].appendChild(link);
+    }
+    link.href = "https://ssl.gstatic.com/classroom/favicon.png";
+  } else {
+    document.title = "Xena";
+  }
+}, [cloakActive]);
+    link.href = "https://ssl.gstatic.com/classroom/favicon.png";
+  } else {
+    document.title = "Xena";
+  }
+}, [cloakActive]);
       document.title = "Riverbend Tutoring";
     }
   }, [cloakActive]);
