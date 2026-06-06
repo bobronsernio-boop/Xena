@@ -1590,7 +1590,14 @@ app.get("/:prefix([a-z0-9]{5})/:filename", async (req, res) => {
     return res.status(500).send(`Error fetching dynamic asset ${prefix}/${filename}: ${err.message}`);
   }
 });
-
+// ============================================================
+// PROXY ENGINE ROUTES
+// ============================================================
+app.get("/proxy/*", handleProxy);
+app.post("/proxy/*", handleProxy);
+app.get("/sw.js", (req, res) => {
+  res.type("application/javascript").send(generateSW());
+});
 // ============================================================
 // DEVELOPMENT VS PRODUCTION SITE SERVE
 // ============================================================
