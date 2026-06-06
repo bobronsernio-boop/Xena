@@ -970,7 +970,7 @@ export default function App() {
     <>
       {showSplash ? (
   <div className="w-full h-screen flex flex-col items-center justify-center bg-[#fce8d9]">
-    <h1 className="text-4xl font-bold text-[#4a3728] mb-4">Riverbend Tutoring</h1>
+   <h1 className="text-4xl font-bold text-white">Xena</h1> 
     <p className="text-[#8b6f5a]">After-School Coaching & Test Prep</p>
     <p className="text-[#8b6f5a] text-sm mt-8">{splashFact}</p>
   </div>
