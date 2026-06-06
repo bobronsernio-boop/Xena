@@ -9,6 +9,7 @@ import https from "https";
 import * as cheerio from "cheerio";
 import { Readable } from "stream";
 import { handleProxy, generateSW } from "./src/proxyEngine.js";
+import youtubesearchapi from 'youtube-search-api';
 
 const app = express();
 const PORT = 3000;
