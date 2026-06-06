@@ -18,7 +18,12 @@ import {
   ClipboardList,
   FolderOpen,
   Cpu,
-  Lock
+  Lock,
+  BookOpen,
+  GraduationCap,
+  Calculator,
+  Award,
+  ChevronDown
 } from "lucide-react";
 
 // ============================================================
@@ -263,239 +268,6 @@ interface ChatThread {
   timestamp: string;
 }
 
-const getInitialAiGreeting = () => {
-  const isSerious = localStorage.getItem("xena_serious_mode") === "true";
-  return isSerious 
-    ? "Greetings. I am XENA. How can I assist you with your academic work, calculations, or coding queries today?" 
-    : "cheese";
-};
-
-function applySlangPostProcessing(text: string): string {
-  if (!text) return "";
-  const parts = text.split("```");
-  const processedParts = parts.map((part, index) => {
-    if (index % 2 !== 0) return part;
-    const subParts = part.split("`");
-    const processedSubParts = subParts.map((subPart, subIndex) => {
-      if (subIndex % 2 !== 0) return subPart;
-      let cleanText = subPart;
-      cleanText = cleanText.replace(/\b[tT]his\b/g, (match) => {
-        return match[0] === "T" ? "Ts" : "ts";
-      });
-      return cleanText;
-    });
-    return processedSubParts.join("`");
-  });
-  return processedParts.join("```");
-}
-
-async function queryPollinationsClientSide(message: string, base64Image?: string, mimeType?: string, seriousMode?: boolean): Promise<string> {
-  const isSerious = !!seriousMode;
-
-  const slangSystemPrompt = `You are XENA, an incredibly chill 13-year-old friend who is also a genius tutoring and homework assistant. Talk exactly like a chill 13-year-old talks to their friends using modern slang. Be casual, relaxed, and not professional at all.
-
-Rules:
-1. Always use casual slang like "yo", "bro", "bruh", "fr", "no cap", "fr fr", "ts" (instead of "this"), "cooking", "let him cook", "ong", "cooked", "cap", "rizz", "sigma", "gyatt", "skibidi".
-2. Crucially, ALWAYS replace the word "this" with "ts" (e.g., "ts is fire", "try ts", "check ts out"). Never speak the word "this" in your conversational text under any circumstances, always write "ts" instead! (But don't alter code blocks, math symbols, or equations).
-3. If the user suggests an approach, answer, or idea that won't work, don't be formal or polite, tell them immediately "su" (shut up) followed by a chill slang correction (e.g., "su bro, ts is cap", "su, that's cap fr", "su bro, ts ain't gonna work"). Use "su" specifically when they suggest something that doesn't work.
-4. Do not use corporate speak, professional terminology, formal greetings, or apologies. Never apologize or say "I understand" or "As an AI".
-5. In your very first sentence, do not use any polite intros. Jump straight into the chill slang conversation.
-6. Even though your tone is incredibly casual and slang-rich, you are actually a genius: you must solve mathematical, coding, or science questions correctly, step-by-step. Put your actual educational content, code blocks, or mathematical proofs inside clear formatting (markdown, lists, code cards), while keeping your chat text pure informal teen slang.`;
-
-  const seriousSystemPrompt = `You are XENA, an expert, highly studious, step-by-step academic homework and study assistant. Speak in a standard, clear, and professional tone. Provide extremely high-quality, mathematically correct, and beautifully formatted answers for mathematical, science, coding, or academic questions. Ensure your explanations are direct, thorough, and highly accurate. Do not use any teen slang or colloquial expressions.`;
-
-  const systemPromptText = isSerious ? seriousSystemPrompt : slangSystemPrompt;
-
-  const seed = Math.floor(Math.random() * 10000000);
-  const models = ["qwen", "openai", "llama", "mistral"];
-  let hasImage = !!base64Image;
-
-  let responseBody = "";
-
-  for (const model of models) {
-    // Try POST first for robust model support with custom system instructions
-    try {
-      console.log(`[XENA AI] Client POST trying Pollinations with model: ${model}`);
-      let payloadMessages: any[] = [
-        { role: "system", content: systemPromptText }
-      ];
-
-      if (hasImage) {
-        let cleanMime = mimeType || "image/png";
-        let cleanBase64 = base64Image || "";
-        if (cleanBase64.includes(";base64,")) {
-          const parts = cleanBase64.split(";base64,");
-          cleanMime = parts[0].replace("data:", "").split(";")[0];
-          cleanBase64 = parts[1];
-        }
-
-        payloadMessages.push({
-          role: "user",
-          content: [
-            { type: "text", text: message || "Analyze this image fr fr, bro!" },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:${cleanMime};base64,${cleanBase64}`
-              }
-            }
-          ]
-        });
-      } else {
-        payloadMessages.push({
-          role: "user",
-          content: message
-        });
-      }
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4500);
-      const response = await fetch("https://text.pollinations.ai/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model,
-          messages: payloadMessages,
-          seed
-        }),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-
-      if (response.ok) {
-        const data = await response.json();
-        const text = data?.choices?.[0]?.message?.content;
-        if (text && text.trim().length > 3 && !text.includes("Queue full") && !text.includes("error\":")) {
-          console.log(`[XENA AI] Client POST succeeded with model: ${model}`);
-          responseBody = text.trim();
-          break;
-        }
-      }
-    } catch (e: any) {
-      console.warn(`[XENA AI] Client POST failed for model ${model}:`, e.message);
-    }
-
-    // Try GET only if POST fails and no image is attached
-    if (!responseBody && !hasImage) {
-      try {
-        console.log(`[XENA AI] Client GET trying Pollinations with model: ${model}`);
-        const promptSlice = message.length < 500 ? message : message.slice(0, 500);
-        const fullPrompt = `${systemPromptText.slice(0, 500)}\n\nUser: ${promptSlice}`;
-        const url = `https://text.pollinations.ai/${encodeURIComponent(fullPrompt)}?model=${model}&cache=false&seed=${seed}`;
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000);
-        const response = await fetch(url, { signal: controller.signal });
-        clearTimeout(timeoutId);
-        if (response.ok) {
-          const text = await response.text();
-          if (text && text.trim().length > 3 && !text.includes("Queue full") && !text.includes("error\":")) {
-            console.log(`[XENA AI] Client GET succeeded with model: ${model}`);
-            responseBody = text.trim();
-            break;
-          }
-        }
-      } catch (e: any) {
-        console.warn(`[XENA AI] Client GET failed for model ${model}:`, e.message);
-      }
-    }
-  }
-
-  if (!responseBody || responseBody.length < 3) {
-    console.log("[XENA AI] Direct client connection timed out or hit 429. Booting local solver.");
-    const lowercase = message.toLowerCase();
-
-    const isSuggestingWrongApproach = lowercase.includes("incorrect") || lowercase.includes("wrong") || lowercase.includes("doesn't work") || lowercase.includes("not working") || lowercase.includes("error") || lowercase.includes("bug") || lowercase.includes("fail") || lowercase.includes("incorrectly") || lowercase.includes("failed") || lowercase.includes("how about") || lowercase.includes("can i just") || lowercase.includes("is the answer");
-
-    if (isSerious) {
-      if (isSuggestingWrongApproach) {
-        responseBody = `Let's analyze this issue step-by-step to correct the methodology. The current approach appears to fail due to logical or syntax issues.
-
-We can solve this problem by refactoring the query structure to use standardized patterns:
-\`\`\`javascript
-// Standard corrected approach
-const executeTask = () => {
-  console.log("Analyzing task and running with optimized configurations.");
-};
-\`\`\`
-Please run this validated algorithm and verify if your execution resolves the issue successfully.`;
-      } else if (/[\d\+\-\*\/=\(\)]/.test(lowercase) && (lowercase.includes("solve") || lowercase.includes("math") || lowercase.includes("calc") || lowercase.includes("equation") || lowercase.includes("equals") || lowercase.includes("limit") || lowercase.includes("derivative"))) {
-        responseBody = `Greetings. I am here to assist with this mathematical analysis. Here is the rigorous step-by-step calculation:
-
-1. **Given Equation**: We isolate variables on the left-hand side.
-2. **Simplification**: Group matching coefficients and calculate parameters.
-3. **Reduction**: We find the exact simplified value.
-
-By following this process, the final calculation simplifies cleanly. Let me know if you would like me to write down a complete algebraic proof or tackle different mathematical bounds.`;
-      } else if (lowercase.includes("code") || lowercase.includes("coding") || lowercase.includes("js") || lowercase.includes("ts") || lowercase.includes("script") || lowercase.includes("function") || lowercase.includes("html") || lowercase.includes("css") || lowercase.includes("array") || lowercase.includes("loop")) {
-        responseBody = `I have analyzed the programming request. Here is an optimized implementation of the function built to solve this efficiently:
-
-\`\`\`javascript
-// Optimized structure with robust runtime safety bounds
-function calculateDataSequence(dataset) {
-  if (!dataset || !Array.isArray(dataset)) return [];
-  return dataset.map(item => ({
-    processed: true,
-    value: item
-  }));
-}
-\`\`\`
-
-This code is optimized for reliability and contains strict type limits. Please let me know which programming language or details you would like to expand upon.`;
-      } else {
-        responseBody = `I am here to support your study goals. Please provide the details of your math equation, coding query, or science task, and I will analyze it thoroughly.`;
-      }
-    } else {
-      if (isSuggestingWrongApproach) {
-        responseBody = `su bro, ts is cap fr. your code or approach is cooked. let's rebuild ts and let him cook:
-
-\`\`\`javascript
-// here is the correct way fr fr
-const cleanUp = () => {
-  console.log("no more errors bro, we are cooking!");
-};
-\`\`\`
-
-yo, try running ts now. no cap, we got ts!`;
-      } else if (/[\d\+\-\*\/=\(\)]/.test(lowercase) && (lowercase.includes("solve") || lowercase.includes("math") || lowercase.includes("calc") || lowercase.includes("equation") || lowercase.includes("equals") || lowercase.includes("limit") || lowercase.includes("derivative"))) {
-        responseBody = `yo, ts math question is actually easy-peasy bro, fr fr. check ts breakdown:
-- first off, don't sweat ts part. we just need to isolate the terms properly.
-- we combine like terms and balance ts equation cleanly.
-- we get the answer on god.
-
-ong ts is correct. let me know if you want another one solved, bro!`;
-      } else if (lowercase.includes("code") || lowercase.includes("coding") || lowercase.includes("js") || lowercase.includes("ts") || lowercase.includes("script") || lowercase.includes("function") || lowercase.includes("html") || lowercase.includes("css") || lowercase.includes("binary") || lowercase.includes("array") || lowercase.includes("loop")) {
-        responseBody = `bruh, your code was sounding a bit cooked, but don't worry, i sorted ts out. check ts beautiful script:
-
-\`\`\`javascript
-// optimized fr fr, no cap
-function letHimCook() {
-  const myStatus = "cooking";
-  const energy = "sigma";
-  return \`yo bro, we are \${myStatus} with \${energy} style!\`;
-}
-\`\`\`
-
-ts is literal fire, run ts immediately, bro! let me know if any other function is giving you errors.`;
-      } else {
-        const defaultPhrases = [
-          "yo, ts is crazy fr. tell me what else we are tackling today, bro!",
-          "bruh ts sounds awesome. let's dive into the details. what's the actual homework problem, bro?",
-          "no cap, we are cooking today. ask me any math or coding problem and i got you fr!",
-          "yo bro, we are absolutely smashing ts. tell me more about what we're working on!"
-        ];
-        const hash = message.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-        responseBody = defaultPhrases[hash % defaultPhrases.length];
-      }
-    }
-  }
-
-  if (!isSerious) {
-    responseBody = applySlangPostProcessing(responseBody);
-  }
-
-  return responseBody;
-}
-
 export default function App() {
   // Tabs management
   const [tabs, setTabs] = useState<Tab[]>(() => {
@@ -503,7 +275,6 @@ export default function App() {
       const params = new URLSearchParams(window.location.search);
       const startUrl = params.get("url");
       if (startUrl) {
-        // Quietly remove query parameter from parent address bar
         try {
           window.history.replaceState({}, document.title, window.location.pathname);
         } catch (e) {}
@@ -543,7 +314,7 @@ export default function App() {
 
     return [{
       id: "tab-1",
-      title: "XENA Engine",
+      title: "Riverbend Tutoring",
       url: "",
       proxyUrl: ""
     }];
@@ -629,7 +400,6 @@ export default function App() {
     if (raw) {
       try {
         let parsed: ChatThread[] = JSON.parse(raw);
-        // Transform obsolete multi-paragraph templates on-the-fly to keep the greeting authentic and short
         const cleaned = parsed.map(th => {
           if (th.messages && th.messages.length > 0 && th.messages[0].sender === "ai") {
             const txt = th.messages[0].text;
@@ -646,7 +416,7 @@ export default function App() {
     const oldRaw = localStorage.getItem("xena_chat_v1");
     let initialMessages = [{
       sender: "ai" as "ai",
-      text: getInitialAiGreeting(),
+      text: "cheese",
       timestamp: new Date().toLocaleTimeString()
     }];
     if (oldRaw) {
@@ -664,7 +434,7 @@ export default function App() {
     return localStorage.getItem("xena_active_thread_id") || "thread-default";
   });
 
-  // Derived state to keep components synchronized
+  // Derived state
   const activeThread = chatThreads.find(th => th.id === activeThreadId) || chatThreads[0];
   const chatMessages = activeThread ? activeThread.messages : [];
 
@@ -694,7 +464,7 @@ export default function App() {
         title: optionalTitle || `Dialogue ${chatThreads.length + 1}`,
         messages: [{
           sender: "ai" as "ai",
-          text: getInitialAiGreeting(),
+          text: "cheese",
           timestamp: new Date().toLocaleTimeString()
         }],
         timestamp: new Date().toLocaleString()
@@ -715,7 +485,7 @@ export default function App() {
          title: "Initial Sync Chat",
          messages: [{
            sender: "ai" as "ai",
-           text: getInitialAiGreeting(),
+           text: "cheese",
            timestamp: new Date().toLocaleTimeString()
          }],
          timestamp: new Date().toLocaleString()
@@ -733,45 +503,6 @@ export default function App() {
       const fallback = filtered[0].id;
       setActiveThreadId(fallback);
       localStorage.setItem("xena_active_thread_id", fallback);
-    }
-  };
-
-  const runHackerAiAutofix = async () => {
-    setAutofixLoading(true);
-    setAutofixReport(null);
-    
-    const steps = [
-      "Analyzing proxy gateway core interceptors...",
-      "Validating 302 Absolute Location redirects rewriting rules...",
-      "Scrubbing active cookies scopes...",
-      "Synchronizing service worker route filters...",
-      "Injecting dynamic HackerAI auto-fixer patches..."
-    ];
-
-    for (const step of steps) {
-      setAutofixProgress(step);
-      await new Promise(r => setTimeout(r, 600));
-    }
-
-    try {
-      const res = await fetch("/api/proxy-autofix", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setAutofixReport(data);
-      } else {
-        throw new Error("Diagnostic endpoint unresponsive");
-      }
-    } catch (e: any) {
-      setAutofixReport({
-        success: false,
-        summary: `HackerAI Auto-Repair exception: ${e.message}. Standard fallback Pℛ()Xy parameters restored.`
-      });
-    } finally {
-      setAutofixLoading(false);
-      setAutofixProgress("");
     }
   };
 
@@ -841,10 +572,9 @@ export default function App() {
     }
   };
 
-  // Reference for file picker triggers
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Active tab reference helper
+  // Active tab reference
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -853,7 +583,7 @@ export default function App() {
     localStorage.setItem("xena_engine", searchEngine);
   }, [searchEngine]);
 
-  // Keep bottom footer telemetry updated
+  // Keep bottom footer updated
   useEffect(() => {
     const updateMetrics = () => {
       const now = new Date();
@@ -870,7 +600,6 @@ export default function App() {
     localStorage.setItem("xena_cloak", String(cloakActive));
     if (cloakActive) {
       document.title = "Google Classroom";
-      // Update shortcut favicon to resemble Google Classroom icon
       let link: any = document.querySelector("link[rel*='icon']");
       if (!link) {
         link = document.createElement("link");
@@ -880,7 +609,7 @@ export default function App() {
       }
       link.href = "https://ssl.gstatic.com/classroom/favicon.png";
     } else {
-      document.title = "Xena Browser";
+      document.title = "Riverbend Tutoring";
     }
   }, [cloakActive]);
 
@@ -896,17 +625,15 @@ export default function App() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [escapeKey, escapeUrl]);
 
-  // PostMessage listener to intercept events from proxied iframes
+  // PostMessage listener
   useEffect(() => {
     const handlePageMessages = (e: MessageEvent) => {
       const data = e.data;
       if (data && typeof data === "object") {
         if ((data.type === "xena-open" || data.type === "open-new-tab") && data.url) {
-          // Block external popup redirection and load natively inside Xena tabs instead!
           e.preventDefault();
           createNewTab(data.url);
         } else if (data.type === "xena-navigate" && (data.proxyUrl || data.url)) {
-          // Resolve current navigated proxy details
           const path = data.proxyUrl || "";
           let resolvedUrl = data.url || "";
           
@@ -939,7 +666,6 @@ export default function App() {
           }
 
           if (resolvedUrl && resolvedUrl.startsWith("http")) {
-            // Update active tab URL and page visits log
             setTabs(prevTabs => prevTabs.map(t => {
               if (t.id === activeTabId) {
                 if (t.url !== resolvedUrl) {
@@ -998,7 +724,7 @@ export default function App() {
     }
     const newTab: Tab = {
       id: newId,
-      title: tabUrl ? (tabUrl === "/dev.html" ? "XENA Dev Panel" : (tabUrl.startsWith("/view") ? "Xena Player" : getDomainOfUrl(tabUrl))) : "XENA Engine",
+      title: tabUrl ? (tabUrl === "/dev.html" ? "XENA Dev Panel" : (tabUrl.startsWith("/view") ? "Xena Player" : getDomainOfUrl(tabUrl))) : "Riverbend Tutoring",
       url: tabUrl,
       proxyUrl: tabProxyUrl
     };
@@ -1028,7 +754,6 @@ export default function App() {
       proxyPath = getProxyUrlFor(finalUrl);
     }
 
-    // Discern search versus url navigation for custom history logging
     const isUrl = rawInput.startsWith("/") || isProbablyUrl(rawInput) || /^https?:\/\//i.test(rawInput);
     const timestampStr = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
@@ -1104,7 +829,6 @@ export default function App() {
     setReports(nextList);
     localStorage.setItem("xena_reports", JSON.stringify(nextList));
 
-    // Optional POST sync to server backend log
     fetch("/api/report", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1116,7 +840,9 @@ export default function App() {
     setModal(null);
   };
 
-  // AI Chat Trigger code with image attachments, calibration screen, and token tracking
+  // ============================================================
+  // SIMPLIFIED sendAIMessage — ONLY calls /api/chat, no Pollinations
+  // ============================================================
   const sendAIMessage = async (customText?: string) => {
     const textToSend = customText !== undefined ? customText : chatInput;
     if (!textToSend.trim() && !attachedImage) return;
@@ -1131,102 +857,52 @@ export default function App() {
 
     const nextMessages = [...chatMessages, userMsg];
     setChatMessages(nextMessages);
-    localStorage.setItem("xena_chat_v1", JSON.stringify(nextMessages));
     setChatInput("");
     setAttachedImage(null);
     setAiLoading(true);
 
-    if (!bypassCalibration) {
-      // Dynamic random Calibration duration between 0s and 5s as requested
-      const calTime = Math.random() * 5000;
-      setCalibrationActive(true);
-      setCalibrationProgress(0);
-
-      const steps = 30;
-      const stepDuration = calTime / steps;
-      let currentStep = 0;
-
-      const runCalibration = () => {
-        return new Promise<void>((resolve) => {
-          const progressInterval = setInterval(() => {
-            currentStep++;
-            const percentage = (currentStep / steps) * 100;
-            setCalibrationProgress(percentage);
-            
-            if (currentStep >= steps) {
-              clearInterval(progressInterval);
-              setTimeout(() => {
-                setCalibrationActive(false);
-                resolve();
-              }, 80);
-            }
-          }, stepDuration);
-        });
-      };
-
-      await runCalibration();
-    }
-
     try {
       let responseText = "";
-      let elapsedMs = 0;
-      let totalTokens = 0;
-      let isFallbackNeeded = true;
 
       try {
         const resp = await fetch("/api/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            message: userMsg.text,
-            image: userMsg.image,
-            mimeType: attachedImageMime,
-            seriousMode: seriousMode
+            message: userMsg.text
           })
         });
         if (resp.ok) {
           const data = await resp.json();
-          if (data.response && !data.response.includes("backup offline mode") && !data.response.includes("low-latency backup") && !data.response.includes("antennas are slightly static")) {
-            responseText = data.response;
-            totalTokens = data.totalTokens || 0;
-            elapsedMs = data.elapsedMs || 0;
-            isFallbackNeeded = false;
-          }
+          responseText = data.response || 'my brain crashed bro';
+        } else {
+          responseText = 'my brain crashed bro';
         }
       } catch (err) {
-        console.warn("[XENA AI] Server fetch error. Activating direct high-performance browser node.", err);
-      }
-
-      if (isFallbackNeeded) {
-        console.log("[XENA AI] Server backup node triggered or offline, using un-throttled browser pipeline.");
-        const startTime = Date.now();
-        responseText = await queryPollinationsClientSide(userMsg.text, userMsg.image, attachedImageMime, seriousMode);
-        elapsedMs = Date.now() - startTime;
-        totalTokens = Math.ceil(userMsg.text.length / 4) + Math.ceil(responseText.length / 4);
+        console.warn("[XENA AI] Server fetch error.", err);
+        responseText = 'my brain crashed bro';
       }
 
       const aiMsg: ChatMessage = {
         sender: "ai",
-        text: responseText || "No content generated.",
-        tokens: totalTokens,
-        elapsed: elapsedMs,
+        text: responseText,
+        tokens: Math.ceil(responseText.length / 4),
+        elapsed: 0,
         timestamp: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true })
       };
       const finalMessages = [...nextMessages, aiMsg];
       setChatMessages(finalMessages);
-      localStorage.setItem("xena_chat_v1", JSON.stringify(finalMessages));
     } catch (e: any) {
-      console.error("[XENA AI] Ultimate client safety check fail:", e);
+      console.error("[XENA AI] Error:", e);
       const aiMsg: ChatMessage = {
         sender: "ai",
-        text: "My neural antennas are slightly static right now, but let's try again! 🧀 Try resending your question or let me know what else is cooking.",
+        text: "my brain crashed bro",
         tokens: 10,
         elapsed: 5,
         timestamp: new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true })
       };
       const finalMessages = [...nextMessages, aiMsg];
       setChatMessages(finalMessages);
-      localStorage.setItem("xena_chat_v1", JSON.stringify(finalMessages));
     } finally {
       setAiLoading(false);
     }
@@ -1236,7 +912,7 @@ export default function App() {
     <div className="w-full h-screen flex flex-col bg-black text-white overflow-hidden select-none font-sans relative">
       
       {/* ============================================================
-          TOP CONTROL BAR & NAVIGATION ACCENTS
+          TOP CONTROL BAR
           ============================================================ */}
       <header className="flex items-center gap-2 px-3 h-14 bg-black border-b border-[#111] relative z-20 shrink-0">
         <div className="flex items-center gap-1.5 shrink-0">
@@ -1300,7 +976,7 @@ export default function App() {
       </header>
 
       {/* ============================================================
-          DYNAMIC CHROMIUM STYLE TABS SPACE WITH UTILITY TOGGLES PUSHED TO THE FAR RIGHT
+          TABS BAR
           ============================================================ */}
       <section className="flex items-end justify-between px-3 bg-black border-b border-[#111] h-10 select-none shrink-0 overflow-x-auto no-scrollbar relative">
         <div className="flex items-end gap-1 select-none overflow-x-auto no-scrollbar">
@@ -1334,7 +1010,6 @@ export default function App() {
           </button>
         </div>
 
-        {/* Top-right menu triggers positioned eleganty on the far right of the top tab space */}
         <div className="flex items-center gap-1.5 mb-1.5 shrink-0 pl-4">
           <button 
             onClick={() => setShieldActive(!shieldActive)}
@@ -1354,12 +1029,11 @@ export default function App() {
           <button 
             onClick={() => setModal("settings")}
             className="flex items-center justify-center w-7.5 h-7.5 rounded-md border border-zinc-850 bg-black text-zinc-450 hover:text-white transition-all duration-150"
-            title="Xena Browser Settings"
+            title="Settings"
           >
             <Settings className="w-4 h-4" />
           </button>
           
-          {/* Glowing purple/pink core gradient button to trigger Xena Neural AI */}
           <button 
             onClick={() => setAiOpen(!aiOpen)}
             className="relative flex items-center justify-center w-7.5 h-7.5 rounded-full bg-gradient-to-tr from-pink-500 via-purple-600 to-violet-700 p-[1.5px] hover:scale-105 active:scale-95 transition-all duration-150 shadow-[0_0_10px_rgba(168,85,247,0.45)] cursor-pointer"
@@ -1373,7 +1047,7 @@ export default function App() {
       </section>
 
       {/* ============================================================
-          MAIN BODY: VIEWPORT OR TWINKLE HOMEPAGE
+          MAIN BODY
           ============================================================ */}
       <main className="flex-1 relative bg-black overflow-hidden">
         {activeTab.proxyUrl ? (
@@ -1387,33 +1061,46 @@ export default function App() {
             />
           </div>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center relative p-6 select-none leading-none z-10">
+          <div className="w-full h-full flex flex-col items-center justify-center relative p-6 select-none leading-none z-10 overflow-y-auto">
             
-            {/* Stars animation canvas */}
             <StarryCanvas />
 
-            <div className="max-w-xl w-full flex flex-col items-center text-center space-y-6 relative mb-12 animate-fadeIn">
-              <div className="text-center select-none cursor-default">
-                {/* Glowing white/silver core name title */}
-                <h1 className="text-7xl font-extrabold font-display tracking-tight text-white drop-shadow-[0_0_12px_rgba(255,255,255,0.55)] select-none">
-                  XENA
-                </h1>
-                
-                {/* Elegant squiggle curve path vector matching reference visual layout */}
-                <svg className="w-24 h-4 mx-auto text-zinc-500 mt-2.5 opacity-80 drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]" viewBox="0 0 100 20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M5 12 Q 25 2, 50 12 T 95 12" />
-                </svg>
-                
-                <p className="text-[9px] text-zinc-650 tracking-[0.3em] font-mono mt-3 uppercase opacity-70">NEURAL ENGINE EMULATOR</p>
+            <div className="max-w-3xl w-full flex flex-col items-center text-center relative mb-8 animate-fadeIn mt-8">
+              
+              {/* Riverbend Tutoring Logo / Branding */}
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg">
+                  <BookOpen className="w-6 h-6 text-white" />
+                </div>
+                <div className="text-left">
+                  <h1 className="text-2xl font-bold text-white tracking-tight">Riverbend Tutoring</h1>
+                  <p className="text-[10px] text-zinc-500 font-mono tracking-wider uppercase">After-School Coaching & Test Prep</p>
+                </div>
               </div>
 
-              {/* Large search form styling matching reference layout */}
+              {/* Tagline */}
+              <p className="text-sm text-zinc-400 max-w-lg mb-6 leading-relaxed">
+                Get personalized academic support from certified tutors. 
+                We help students build confidence, improve grades, and ace exams.
+              </p>
+
+              {/* Login / Sign Up Buttons */}
+              <div className="flex gap-3 mb-8">
+                <button className="px-6 py-2.5 bg-white text-black rounded-lg text-sm font-semibold hover:bg-zinc-200 transition-all">
+                  Log In
+                </button>
+                <button className="px-6 py-2.5 border border-zinc-700 text-zinc-300 rounded-lg text-sm font-semibold hover:bg-zinc-900 hover:text-white transition-all">
+                  Sign Up Free
+                </button>
+              </div>
+
+              {/* SEARCH BAR (proxy disguised) */}
               <form 
                 onSubmit={(e) => {
                   e.preventDefault();
                   handleNavigate(startInput);
                 }}
-                className="w-full flex h-12 rounded-xl border border-zinc-800 bg-black overflow-hidden shadow-2xl focus-within:border-zinc-500 focus-within:ring-0 transition-all duration-200"
+                className="w-full max-w-xl flex h-12 rounded-xl border border-zinc-800 bg-black overflow-hidden shadow-2xl focus-within:border-zinc-500 focus-within:ring-0 transition-all duration-200 mb-10"
               >
                 <select 
                   value={searchEngine} 
@@ -1430,7 +1117,7 @@ export default function App() {
                   type="text" 
                   value={startInput}
                   onChange={(e) => setStartInput(e.target.value)}
-                  placeholder="Enter Search Query or Site URL..."
+                  placeholder="Search educational resources or enter a study URL..."
                   spellCheck={false}
                   className="flex-1 px-4 text-white bg-transparent outline-none text-sm placeholder-zinc-650"
                 />
@@ -1439,24 +1126,84 @@ export default function App() {
                 </button>
               </form>
 
-              {/* Center Shortcut bookmark - ONLY XENA AI bookmark shown */}
-              <div className="pt-2">
+              {/* 3 Service Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full max-w-3xl mb-8">
+                <div className="bg-zinc-950/80 border border-zinc-800 rounded-xl p-5 text-left hover:border-zinc-700 transition-all">
+                  <div className="w-10 h-10 rounded-lg bg-amber-500/20 flex items-center justify-center mb-3">
+                    <Calculator className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <h3 className="text-sm font-bold text-white mb-2">Weekly Academic Coaching</h3>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                    Ongoing one-on-one support in math, science, English, and more. 
+                    Build strong study habits and stay on track all semester.
+                  </p>
+                </div>
+
+                <div className="bg-zinc-950/80 border border-zinc-800 rounded-xl p-5 text-left hover:border-zinc-700 transition-all">
+                  <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center mb-3">
+                    <GraduationCap className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <h3 className="text-sm font-bold text-white mb-2">Subject-Focused Tutoring</h3>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                    Deep dives into specific subjects — from Algebra to Chemistry. 
+                    Master difficult concepts with step-by-step guidance.
+                  </p>
+                </div>
+
+                <div className="bg-zinc-950/80 border border-zinc-800 rounded-xl p-5 text-left hover:border-zinc-700 transition-all">
+                  <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center mb-3">
+                    <Award className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <h3 className="text-sm font-bold text-white mb-2">SAT/ACT Prep</h3>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                    Targeted test-taking strategies, practice exams, and score analysis. 
+                    Boost your confidence and maximize your results.
+                  </p>
+                </div>
+              </div>
+
+              {/* Quick Link Buttons */}
+              <div className="flex flex-wrap justify-center gap-3 mb-6">
+                <button 
+                  onClick={() => handleNavigate("khanacademy.org")}
+                  className="flex items-center gap-2 px-4 py-2 bg-zinc-900/80 border border-zinc-800 rounded-full text-[11px] text-zinc-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-600 transition-all"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Khan Academy
+                </button>
+                <button 
+                  onClick={() => handleNavigate("quizlet.com")}
+                  className="flex items-center gap-2 px-4 py-2 bg-zinc-900/80 border border-zinc-800 rounded-full text-[11px] text-zinc-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-600 transition-all"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Quizlet
+                </button>
+                <button 
+                  onClick={() => handleNavigate("desmos.com")}
+                  className="flex items-center gap-2 px-4 py-2 bg-zinc-900/80 border border-zinc-800 rounded-full text-[11px] text-zinc-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-600 transition-all"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Desmos
+                </button>
                 <button 
                   onClick={() => setAiOpen(true)}
-                  className="flex items-center gap-2 px-6 py-2.5 bg-[#090909] border border-zinc-800/80 rounded-full hover:bg-zinc-900 hover:border-zinc-500 font-medium text-xs tracking-wider uppercase text-zinc-300 hover:text-white transition-all duration-200 cursor-pointer shadow-[0_0_12px_rgba(255,255,255,0.02)] active:scale-95"
-                  title="Unlock Neural Core AI"
+                  className="flex items-center gap-2 px-4 py-2 bg-zinc-900/80 border border-zinc-800 rounded-full text-[11px] text-zinc-300 hover:bg-zinc-800 hover:text-white hover:border-zinc-600 transition-all"
                 >
-                  <span className="text-zinc-500 animate-pulse">✦</span>
-                  <span>XENA AI</span>
+                  <Sparkles className="w-3 h-3" />
+                  AI Study Assistant
                 </button>
               </div>
+
+              <p className="text-[10px] text-zinc-600 font-mono mt-2">
+                © 2026 Riverbend Tutoring. All rights reserved.
+              </p>
             </div>
           </div>
         )
       }</main>
 
       {/* ============================================================
-          SIDEBAR: XENA NEURAL AI BOT PANEL
+          AI SIDEBAR PANEL
           ============================================================ */}
       <section className={`fixed top-0 bottom-0 right-0 w-80 sm:w-96 bg-black border-l border-zinc-850 z-40 shadow-2xl flex flex-col transition-all duration-300 transform ${aiOpen ? "translate-x-0" : "translate-x-full"}`}>
         <div className="flex items-center justify-between px-4 h-14 border-b border-zinc-850 bg-black">
@@ -1465,31 +1212,6 @@ export default function App() {
             <span className="font-semibold text-[11px] tracking-wider uppercase text-white">XENA NEURAL AI</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => {
-                const nextSerious = !seriousMode;
-                setSeriousMode(nextSerious);
-                localStorage.setItem("xena_serious_mode", String(nextSerious));
-                // Update active thread's greeting if it is the "default" first-session with just one greeting message
-                if (chatMessages.length === 1 && chatMessages[0].sender === "ai") {
-                  const cleanedGreeting = nextSerious 
-                    ? "Greetings. I am XENA. How can I assist you with your academic work, calculations, or coding queries today?" 
-                    : "cheese";
-                  setChatMessages([{
-                    ...chatMessages[0],
-                    text: cleanedGreeting
-                  }]);
-                }
-              }}
-              title={seriousMode ? "Switch to Chill Slang mode (Cool friend)" : "Switch to Serious Study mode (Standard tutor)"}
-              className={`text-[9px] font-mono font-bold tracking-widest leading-none px-2 py-1 rounded border mr-1 uppercase cursor-pointer transition-all ${
-                seriousMode 
-                  ? "bg-emerald-950/40 text-emerald-400 border-emerald-900/60 hover:bg-emerald-900/30" 
-                  : "bg-purple-950/40 text-purple-400 border-purple-900/60 hover:bg-purple-900/30"
-              }`}
-            >
-              {seriousMode ? "😐 Serious" : "😎 Chill"}
-            </button>
             <button 
               onClick={() => startNewThread()}
               title="New Chat Session"
@@ -1502,7 +1224,7 @@ export default function App() {
                 setModal("settings");
                 setSettingsTab("ai");
               }}
-              title="Dialogue Sessions Log"
+              title="Chat Sessions"
               className="text-zinc-500 hover:text-white p-1 rounded bg-zinc-950 border border-zinc-900 cursor-pointer transition-all"
             >
               <FolderOpen className="w-3.5 h-3.5" />
@@ -1527,33 +1249,7 @@ export default function App() {
           {dragActive && (
             <div className="absolute inset-x-2 inset-y-2 bg-black/90 rounded-lg flex flex-col items-center justify-center p-6 z-40 border border-zinc-800 pointer-events-none select-none">
               <Sparkles className="w-8 h-8 text-white animate-pulse mb-2" />
-              <p className="text-xs font-mono text-white tracking-widest uppercase">Drop Visual Asset Here</p>
-              <p className="text-[9px] text-zinc-500 font-mono tracking-widest uppercase mt-1">XENA Multimodal Intercept</p>
-            </div>
-          )}
-          
-          {/* Dynamic Interactive Calibration Modal Layer inside Panel */}
-          {calibrationActive && (
-            <div className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-6 z-50 select-none">
-              <div className="border border-zinc-800 bg-zinc-950 p-6 rounded-2xl w-full max-w-[260px] flex flex-col items-center space-y-4 shadow-[0_0_30px_rgba(255,255,255,0.05)] text-center">
-                <div className="w-10 h-10 rounded-full border-t-2 border-r-2 border-white animate-spin flex items-center justify-center">
-                  <span className="text-[9px] font-mono tracking-widest text-zinc-500 animate-pulse">X.N.E</span>
-                </div>
-                <div>
-                  <h4 className="text-xs font-semibold tracking-wider uppercase text-white animate-pulse">Calibrating Neural Engine</h4>
-                  <p className="text-[9px] text-zinc-500 font-mono tracking-widest uppercase mt-1">Status: Adjusting Synaptics</p>
-                </div>
-                <div className="w-full bg-zinc-900 h-1.5 rounded-full overflow-hidden relative border border-zinc-800">
-                  <div 
-                    className="bg-zinc-400 h-full shadow-[0_0_6px_#fff] transition-all duration-150 ease-out" 
-                    style={{ width: `${calibrationProgress}%` }}
-                  />
-                </div>
-                <div className="flex items-center justify-between w-full text-[9px] font-mono text-zinc-650">
-                  <span>PROC: {Math.floor(calibrationProgress)}%</span>
-                  <span className="animate-pulse">ONLINE</span>
-                </div>
-              </div>
+              <p className="text-xs font-mono text-white tracking-widest uppercase">Drop Image Here</p>
             </div>
           )}
 
@@ -1562,34 +1258,30 @@ export default function App() {
             return (
               <div key={i} className={`flex flex-col ${isAI ? "items-start" : "items-end"} animate-fadeIn`}>
                 <div className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-xs leading-relaxed ${isAI ? "bg-zinc-950 border border-zinc-850 text-zinc-200" : "bg-zinc-900 border border-zinc-800 text-white"}`}>
-                  {/* Sent image display */}
                   {msg.image && (
                     <img 
                       src={msg.image} 
-                      alt="Uploaded image thumbnail"
+                      alt="Uploaded"
                       className="max-w-full max-h-40 object-cover rounded-lg mb-1.5 border border-zinc-800"
                     />
                   )}
                   <p className="whitespace-pre-wrap">{msg.text}</p>
                 </div>
                 
-                {/* Meta tokens cost and timestamp stats banner */}
                 <span className="text-[9px] text-zinc-500 mt-1 px-1 font-mono flex items-center gap-1.5">
                   <span>{msg.timestamp}</span>
                   {isAI && msg.tokens !== undefined && (
                     <>
                       <span>•</span>
-                      <span className="text-zinc-450 uppercase tracking-wider">⚡ {(msg.elapsed ? msg.elapsed / 1000 : 0.7).toFixed(2)}s / {msg.tokens} TOKENS</span>
+                      <span className="text-zinc-450 uppercase tracking-wider">⚡ {msg.tokens} TOKENS</span>
                     </>
                   )}
                   <span>•</span>
                   <button 
                     type="button"
-                    onClick={() => {
-                      navigator.clipboard.writeText(msg.text);
-                    }}
+                    onClick={() => navigator.clipboard.writeText(msg.text)}
                     className="text-zinc-500 hover:text-white cursor-pointer transition-colors uppercase font-mono tracking-wider font-bold"
-                    title="Copy message to clipboard"
+                    title="Copy message"
                   >
                     COPY
                   </button>
@@ -1598,17 +1290,16 @@ export default function App() {
             );
           })}
           
-          {aiLoading && !calibrationActive && (
+          {aiLoading && (
             <div className="flex items-center gap-2 text-zinc-500 text-[10px] font-mono py-1 px-2.5">
               <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce"></span>
               <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce delay-150"></span>
               <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 animate-bounce delay-300"></span>
-              <span>Evaluating synaptic inputs...</span>
+              <span>thinking...</span>
             </div>
           )}
         </div>
 
-        {/* File Input with Base64 Converter callback */}
         <input 
           type="file" 
           ref={fileInputRef} 
@@ -1627,12 +1318,11 @@ export default function App() {
           className="hidden" 
         />
 
-        {/* Thumbnail preview row inside form drawer */}
         {attachedImage && (
           <div className="px-3 py-2 bg-zinc-950 border-t border-zinc-900 flex items-center justify-between relative">
             <div className="flex items-center gap-2">
               <img src={attachedImage} className="w-8 h-8 rounded border border-zinc-800 object-cover" />
-              <span className="text-[10px] text-zinc-400 font-mono truncate max-w-[120px]">ATTACHED_IMAGE</span>
+              <span className="text-[10px] text-zinc-400 font-mono truncate max-w-[120px]">IMAGE</span>
             </div>
             <button 
               type="button" 
@@ -1644,7 +1334,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Text Input Row */}
         <form 
           onSubmit={(e) => {
             e.preventDefault();
@@ -1653,12 +1342,11 @@ export default function App() {
           className="p-3 border-t border-zinc-850 bg-black"
         >
           <div className="flex min-h-[44px] rounded-lg border border-zinc-800 bg-black overflow-hidden focus-within:border-zinc-500 transition-all duration-150 items-center">
-            {/* Image attachment file picker button */}
             <button 
               type="button" 
               onClick={() => fileInputRef.current?.click()}
               className="px-2.5 h-10 flex items-center justify-center text-zinc-400 hover:text-white cursor-pointer transition-colors"
-              title="Attach visual asset"
+              title="Attach image"
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -1667,7 +1355,6 @@ export default function App() {
               onChange={(e) => setChatInput(e.target.value)}
               onPaste={handleChatPaste}
               onKeyDown={(e) => {
-                // If Enter is pressed without Shift key, submit message
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   if (chatInput.trim() || attachedImage) {
@@ -1675,7 +1362,7 @@ export default function App() {
                   }
                 }
               }}
-              placeholder="Query the internal neural cell..."
+              placeholder="Ask the AI assistant..."
               className="flex-1 px-1 py-2 bg-transparent outline-none text-xs text-white placeholder-zinc-600 resize-none max-h-32 min-h-[22px] overflow-y-auto leading-normal"
               rows={1}
             />
@@ -1691,13 +1378,13 @@ export default function App() {
       </section>
 
       {/* ============================================================
-          MODAL: SETTINGS INTERFACE
+          MODAL: SETTINGS
           ============================================================ */}
       {modal === "settings" && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-[#050505] border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-850 bg-black">
-              <span className="font-semibold text-xs tracking-wider text-white uppercase flex items-center gap-1.5 prose-zinc">
+              <span className="font-semibold text-xs tracking-wider text-white uppercase flex items-center gap-1.5">
                 <Settings className="w-3.5 h-3.5 text-zinc-400" /> SYSTEM CONTROL CENTER
               </span>
               <button onClick={() => setModal(null)} className="text-zinc-500 hover:text-white cursor-pointer select-none">
@@ -1705,7 +1392,6 @@ export default function App() {
               </button>
             </header>
             
-            {/* TABS SELECTOR BAR */}
             <div className="flex border-b border-zinc-900 bg-black px-1">
               <button 
                 onClick={() => setSettingsTab("general")}
@@ -1717,7 +1403,7 @@ export default function App() {
                 onClick={() => setSettingsTab("search")}
                 className={`flex-1 py-2 text-[9px] font-mono tracking-wider uppercase border-b-2 text-center transition-all ${settingsTab === "search" ? "border-white text-white font-bold" : "border-transparent text-zinc-500 hover:text-zinc-300"}`}
               >
-                History Logs
+                History
               </button>
               <button 
                 onClick={() => setSettingsTab("ai")}
@@ -1735,10 +1421,8 @@ export default function App() {
 
             <div className="p-4 space-y-4 overflow-y-auto flex-1 no-scrollbar bg-[#050505]">
               
-              {/* STATUS TAB 1: GENERAL & STEALTH */}
               {settingsTab === "general" && (
                 <div className="space-y-4">
-                  {/* Pⓡ0𝘅y Passkey settings */}
                   <div>
                     <label className="block text-[9px] font-mono tracking-wider text-zinc-500 mb-1.5 uppercase">Pⓡ0𝘅y Master Passkey</label>
                     <div className="flex gap-2">
@@ -1746,13 +1430,13 @@ export default function App() {
                         type="password" 
                         value={proxyKey}
                         onChange={(e) => setProxyKey(e.target.value)}
-                        placeholder="Enter system access passkey..."
+                        placeholder="Enter passkey..."
                         className="flex-1 h-9 rounded-lg border border-zinc-800 bg-black px-3 text-xs text-white focus:border-zinc-500 outline-none"
                       />
                       <button 
                         onClick={() => {
                           localStorage.setItem("xena_proxy_key", proxyKey);
-                          alert("Pⓡ0𝘅y passkey saved and synced.");
+                          alert("Pⓡ0𝘅y passkey saved.");
                         }}
                         className="h-9 px-3.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-white text-xs font-semibold transition-all duration-150 cursor-pointer"
                       >
@@ -1761,11 +1445,10 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Cloak Settings view */}
                   <div className="flex items-center justify-between p-3 rounded-lg border border-zinc-850 bg-black">
                     <div>
                       <span className="block text-xs font-semibold text-zinc-200">Classroom Stealth Mode</span>
-                      <span className="block text-[10px] text-zinc-500 mt-0.5 font-mono">Disguises tabs title as 'Google Classroom'</span>
+                      <span className="block text-[10px] text-zinc-500 mt-0.5 font-mono">Disguises tab title as 'Google Classroom'</span>
                     </div>
                     <button 
                       onClick={() => setCloakActive(!cloakActive)}
@@ -1775,11 +1458,10 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* Stealth Frame Launchers (blob: and about:blank) */}
                   <div className="p-3 rounded-lg border border-zinc-850 bg-black space-y-2">
                     <div>
                       <span className="block text-xs font-semibold text-zinc-200">Stealth Frame Launchers</span>
-                      <span className="block text-[10px] text-zinc-500 mt-0.5 font-mono">Spawns isolated sandboxed wrapper frames to evade filter traces</span>
+                      <span className="block text-[10px] text-zinc-500 mt-0.5 font-mono">Spawn isolated sandboxed wrapper frames</span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mt-2">
                       <button 
@@ -1792,10 +1474,10 @@ export default function App() {
                               `);
                               win.document.close();
                             } else {
-                              alert("Popup blocked! Change browser settings to allow popups.");
+                              alert("Popup blocked! Change browser settings.");
                             }
                           } catch (e) {
-                            alert("Bypass failed on this frame.");
+                            alert("Bypass failed.");
                           }
                         }}
                         className="py-1.5 px-3 rounded-md text-[9px] font-mono font-semibold tracking-wider bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white transition-all cursor-pointer text-center"
@@ -1825,7 +1507,8 @@ export default function App() {
                             const url = URL.createObjectURL(blob);
                             const win = window.open(url, "_blank");
                             if (!win) {
-                              alert("Popup blocked! Change browser settings to allow popups.");
+                              alert
+                                alert("Popup blocked! Change browser settings.");
                             }
                           } catch (e) {
                             alert("Blob injection blocked.");
@@ -1870,7 +1553,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* Dynamic Xena Pⓡ0𝘅y Network Operational Modes list */}
+                  {/* Proxy Modes */}
                   <div className="space-y-3 pt-2">
                     <span className="block text-[9px] font-mono tracking-wider text-zinc-500 uppercase">Pⓡ0𝘅y ROUTING MODES ({PROXY_MODES.length} SELECTABLE)</span>
                     <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 no-scrollbar">
@@ -1920,98 +1603,11 @@ export default function App() {
                       })}
                     </div>
                   </div>
-
-                  {/* How This Pⓡ0𝘅y Works detailed help section */}
-                  <div className="pt-3 border-t border-zinc-900 mt-4 space-y-3">
-                    <span className="block text-[9px] font-mono tracking-wider text-emerald-500 uppercase font-bold flex items-center gap-1.5">
-                      <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                      How This Pⓡ0𝘅y Works
-                    </span>
-                    <div className="p-3 bg-zinc-950 border border-zinc-900 rounded-lg text-[10px] space-y-3 font-sans text-zinc-450 leading-relaxed no-scrollbar max-h-[280px] overflow-y-auto">
-                      <p>
-                        This repository is built around <strong className="text-zinc-200">Scramjet</strong> — a bleeding-edge WebAssembly-based service worker pⓡ0𝘅y built for extreme stability and native speeds.
-                      </p>
-                      
-                      <div className="space-y-1">
-                        <strong className="text-zinc-200 block text-[10px] font-mono uppercase tracking-wider text-zinc-400">Core Architecture</strong>
-                        <ul className="list-disc pl-4 space-y-1">
-                          <li>
-                            <strong className="text-zinc-300">Service Worker (sw.js)</strong> — This is the primary engine. When you visit the site, the service worker installs itself and intercepts all matching network requests.
-                          </li>
-                          <li>
-                            <strong className="text-zinc-300">Scramjet WASM Library</strong> (<code className="font-mono text-[9px] text-zinc-400">runtime/scramjet/scramjet.all.js</code>) — A compiled WebAssembly module that does the actual pⓡ0𝘅ying. It's built in Rust and compiled to WASM, which means:
-                            <ul className="list-circle pl-4 mt-1 space-y-0.5">
-                              <li>It runs directly in the browser, not on a remote server.</li>
-                              <li>It rewrites HTML, JavaScript, CSS, and URLs on-the-fly as pages load.</li>
-                              <li>It modifies relative links to absolute ones so they route back through the pⓡ0𝘅y scope seamlessly.</li>
-                            </ul>
-                          </li>
-                          <li>
-                            <strong className="text-zinc-300">The Frontend (index.html)</strong> — Disguised as a tutoring service called "Northstar Tutoring." The pⓡ0𝘅y functionality is completely invisible from visual inspections.
-                          </li>
-                        </ul>
-                      </div>
-
-                      <div className="space-y-1">
-                        <strong className="text-zinc-200 block text-[10px] font-mono uppercase tracking-wider text-zinc-400">How It Actually Works</strong>
-                        <ol className="list-decimal pl-4 space-y-1">
-                          <li>When you enter a URL in the pⓡ0𝘅y's interface, the service worker intercepts the request before it leaves your browser.</li>
-                          <li>It passes the request payload through the client's WebAssembly Scramjet engine.</li>
-                          <li>Scramjet rewrites the target URL, encoding the destination and wrapping it in a path on the pⓡ0𝘅y's own domain.</li>
-                          <li>Your browser fetches the page from the pⓡ0𝘅y's domain, which the school filter sees as just another educational website.</li>
-                          <li>As the page loads, Scramjet rewrites all HTML, JS, and CSS — converting links, media, and AJAX requests to also route through the pⓡ0𝘅y.</li>
-                          <li>The result renders locally in your browser as if you are on the original site.</li>
-                        </ol>
-                      </div>
-
-                      <div className="space-y-1">
-                        <strong className="text-zinc-200 block text-[10px] font-mono uppercase tracking-wider text-zinc-400">Why It Outperforms Standard Pⓡ0𝘅ies</strong>
-                        <ul className="list-disc pl-4 space-y-1">
-                          <li><strong className="text-zinc-300">No external server needed</strong> — Self-contained client-side environment. Works beautifully on static platforms.</li>
-                          <li><strong className="text-zinc-300">Fast WebAssembly translations</strong> — The Rust-compiled engine rewrites payloads at native speeds.</li>
-                          <li><strong className="text-zinc-300">Standardized logs profile</strong> — To filter grids, traffic looks completely normal.</li>
-                          <li><strong className="text-zinc-300">Disguised as educational tutors</strong> — Won't trigger trigger flags or trigger blacklists.</li>
-                        </ul>
-                      </div>
-
-                      <div className="pt-2 border-t border-zinc-900">
-                        <strong className="text-zinc-200 block text-[10px] font-mono uppercase tracking-wider text-zinc-400 mb-1.5">Key Files Map</strong>
-                        <table className="w-full border-collapse text-[9px] font-mono">
-                          <thead>
-                            <tr className="border-b border-zinc-900 text-zinc-600 text-left">
-                              <th className="py-1 font-bold">File Name</th>
-                              <th className="py-1 font-bold">Purpose</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr className="border-b border-zinc-900/40">
-                              <td className="py-1 text-zinc-300 font-bold">index.html</td>
-                              <td className="py-1">Fake tutoring frontend UI</td>
-                            </tr>
-                            <tr className="border-b border-zinc-900/40">
-                              <td className="py-1 text-zinc-300 font-bold">sw.js</td>
-                              <td className="py-1">Service worker traffic intercepter</td>
-                            </tr>
-                            <tr>
-                              <td className="py-1 text-zinc-300 font-bold">scramjet.all.js</td>
-                              <td className="py-1">Actual WASM Pℛ()Xy engine with JS bindings</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-
-                      <p className="text-[9px] text-zinc-500 italic">
-                        Deployment is completely free on static sites such as GitHub Pages. No server, node VPS, database configs, or hosting payments are necessary.
-                      </p>
-                    </div>
-                  </div>
                 </div>
               )}
 
-              {/* STATUS TAB 2: EXPLICIT HISTORY ENGINE */}
               {settingsTab === "search" && (
                 <div className="space-y-5">
-                  {/* SEARCH QUERIES HISTORIES */}
                   <div className="space-y-2">
                     <div className="flex justify-between items-center mr-1">
                       <span className="text-[9px] font-mono font-semibold tracking-wider text-zinc-500 uppercase">Search Logs</span>
@@ -2064,10 +1660,9 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* PAGE VISITS CORES */}
                   <div className="space-y-2">
                     <div className="flex justify-between items-center mr-1">
-                      <span className="text-[9px] font-mono font-semibold tracking-wider text-zinc-500 uppercase">Page Visted History</span>
+                      <span className="text-[9px] font-mono font-semibold tracking-wider text-zinc-500 uppercase">Page Visit History</span>
                       {browseHistory.length > 0 && (
                         <button 
                           onClick={() => {
@@ -2119,14 +1714,12 @@ export default function App() {
                 </div>
               )}
 
-              {/* STATUS TAB 3: DIALOGUE SESSION THREADS */}
               {settingsTab === "ai" && (
                 <div className="space-y-3">
-                  {/* Calibration Bypass controls */}
                   <div className="p-3 border border-zinc-850 bg-black rounded-lg flex items-center justify-between">
                     <div>
                       <span className="block text-xs font-semibold text-zinc-200 font-mono">Neural Calibration Bypass</span>
-                      <span className="block text-[9px] text-zinc-550 mt-1 font-mono uppercase">Skip delay tuning sequences on messages</span>
+                      <span className="block text-[9px] text-zinc-550 mt-1 font-mono uppercase">Skip delay tuning sequences</span>
                     </div>
                     <button 
                       onClick={() => {
@@ -2134,7 +1727,7 @@ export default function App() {
                         setBypassCalibration(nextVal);
                         localStorage.setItem("xena_bypass_calibration", String(nextVal));
                       }}
-                      className={`px-3 py-1 rounded-md text-[10px] font-semibold tracking-wider font-mono transition-all duration-150 ${bypassCalibration ? "bg-white/10 text-white border border-zinc-700 select-none cursor-pointer" : "bg-zinc-950 border border-zinc-900 text-zinc-600 select-none cursor-pointer"}`}
+                      className={`px-3 py-1 rounded-md text-[10px] font-semibold tracking-wider font-mono transition-all duration-150 ${bypassCalibration ? "bg-white/10 text-white border border-zinc-700" : "bg-zinc-950 border border-zinc-900 text-zinc-600"}`}
                     >
                       {bypassCalibration ? "BYPASSED" : "ACTIVE"}
                     </button>
@@ -2164,7 +1757,7 @@ export default function App() {
                         >
                           <div className="flex flex-col min-w-0 mr-3">
                             <span className="text-xs font-semibold font-mono truncate text-zinc-200">{thread.title}</span>
-                            <span className="text-[8px] font-mono uppercase text-zinc-555 mt-1">{thread.messages.length} messages • Updated: {thread.timestamp}</span>
+                            <span className="text-[8px] font-mono uppercase text-zinc-555 mt-1">{thread.messages.length} messages • {thread.timestamp}</span>
                           </div>
                           <div className="flex gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                             <button 
@@ -2181,20 +1774,19 @@ export default function App() {
                 </div>
               )}
 
-              {/* STATUS TAB 4: HACKERAI AUTO-FIX SECURITY REPAIRS */}
               {settingsTab === "autofix" && (
                 <div className="space-y-4 font-mono text-center py-6">
                   <Cpu className="w-12 h-12 mx-auto text-zinc-750 animate-pulse mb-3" />
                   <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Access Restricted</h4>
                   <p className="text-[10px] leading-relaxed text-zinc-550 max-w-xs mx-auto font-sans">
-                    For terminal core integrity and system security, HackerAI dynamic self-repair interfaces are restricted exclusively to the <strong className="text-zinc-300">XENA Dev Panel</strong>.
+                    HackerAI dynamic self-repair interfaces are restricted to the <strong className="text-zinc-300">XENA Dev Panel</strong>.
                   </p>
                   <button 
                     onClick={() => {
                       createNewTab("/dev.html");
                       setModal(null);
                     }}
-                    className="mt-3 px-4 py-1.5 bg-zinc-950 border border-zinc-850 text-[10px] font-mono font-bold tracking-wider text-white hover:bg-zinc-900 rounded-md cursor-pointer transition-all hover:border-zinc-700 font-bold"
+                    className="mt-3 px-4 py-1.5 bg-zinc-950 border border-zinc-850 text-[10px] font-mono font-bold tracking-wider text-white hover:bg-zinc-900 rounded-md cursor-pointer transition-all hover:border-zinc-700"
                   >
                     LAUNCH DEV PANEL
                   </button>
@@ -2207,7 +1799,7 @@ export default function App() {
       )}
 
       {/* ============================================================
-          MODAL: REPORT FILER
+          MODAL: REPORT
           ============================================================ */}
       {modal === "report" && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-xs flex items-center justify-center z-50 p-4">
@@ -2250,18 +1842,18 @@ export default function App() {
                   type="text" 
                   value={reportForm.url}
                   onChange={(e) => setReportForm({ ...reportForm, url: e.target.value })}
-                  placeholder="https://tock-domain..."
+                  placeholder="https://..."
                   className="w-full h-9 rounded-lg border border-zinc-800 bg-black px-3 text-xs text-white outline-none focus:border-zinc-500"
                 />
               </div>
 
               <div>
-                <label className="block text-[9px] font-mono tracking-wider text-zinc-500 mb-1.5 uppercase">REPORT DETAILS</label>
+                <label className="block text-[9px] font-mono tracking-wider text-zinc-500 mb-1.5 uppercase">DETAILS</label>
                 <textarea 
                   rows={4}
                   value={reportForm.details}
                   onChange={(e) => setReportForm({ ...reportForm, details: e.target.value })}
-                  placeholder="What occurred, and exactly what step led to the bug..."
+                  placeholder="What occurred..."
                   className="w-full rounded-lg border border-zinc-800 bg-black p-3 text-xs text-white outline-none resize-none focus:border-zinc-500"
                 />
               </div>
@@ -2273,7 +1865,6 @@ export default function App() {
                 SUBMIT REPORT
               </button>
 
-              {/* Display history list */}
               {reports.length > 0 && (
                 <div className="pt-4 border-t border-zinc-850 space-y-2">
                   <span className="block text-[9px] font-mono tracking-wider text-zinc-500 uppercase font-bold">YOUR SUBMISSIONS ({reports.length})</span>
@@ -2295,7 +1886,7 @@ export default function App() {
       )}
 
       {/* ============================================================
-          FOOTER STATUSBAR: SYSTEM STATE INDICATOR
+          FOOTER
           ============================================================ */}
       <footer className="h-6 border-t border-zinc-900 bg-black text-[9px] font-mono tracking-wider text-zinc-500 flex items-center justify-between px-3 select-none shrink-0 relative z-20">
         <div className="flex items-center gap-3">
@@ -2322,7 +1913,7 @@ export default function App() {
 }
 
 // ============================================================
-// SOLID CANOPY STARFIELD ENGINE CANVAS
+// STARRY BACKGROUND CANVAS
 // ============================================================
 function StarryCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -2336,7 +1927,6 @@ function StarryCanvas() {
     let animId: number;
     let stars: Array<{ x: number; y: number; r: number; alpha: number; speed: number; dir: number }> = [];
 
-    // ResizeObserver initialization
     const resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
         canvas.width = entry.contentRect.width;
@@ -2349,7 +1939,7 @@ function StarryCanvas() {
 
     const initStars = (w: number, h: number) => {
       stars = [];
-      const numStars = Math.floor((w * h) / 8000); // dynamic destiny scale
+      const numStars = Math.floor((w * h) / 8000);
       for (let i = 0; i < numStars; i++) {
         stars.push({
           x: Math.random() * w,
@@ -2368,16 +1958,9 @@ function StarryCanvas() {
 
       for (let i = 0; i < stars.length; i++) {
         const s = stars[i];
-        
-        // Twinkling opacity change
         s.alpha += s.speed * s.dir;
-        if (s.alpha >= 1) {
-          s.alpha = 1;
-          s.dir = -1;
-        } else if (s.alpha <= 0.15) {
-          s.alpha = 0.15;
-          s.dir = 1;
-        }
+        if (s.alpha >= 1) { s.alpha = 1; s.dir = -1; }
+        else if (s.alpha <= 0.15) { s.alpha = 0.15; s.dir = 1; }
 
         ctx.globalAlpha = s.alpha;
         ctx.beginPath();
@@ -2385,7 +1968,7 @@ function StarryCanvas() {
         ctx.fill();
       }
 
-      ctx.globalAlpha = 1.0; // reset
+      ctx.globalAlpha = 1.0;
       animId = requestAnimationFrame(draw);
     };
 
