@@ -6,7 +6,6 @@ import cookieParser from "cookie-parser";
 import { createServer as createViteServer } from "vite";
 import http from "http";
 import https from "https";
-import { GoogleGenAI } from "@google/genai";
 import * as cheerio from "cheerio";
 import { Readable } from "stream";
 import { handleProxy, generateSW } from "./src/proxyEngine.js";
@@ -219,7 +218,6 @@ function rewriteProxiedHtml(html: string, token: string, targetUrl: string, type
           if (url && typeof url === 'string') {
             const resolved = resolveUrl(url);
             try {
-              // Post up message to parent browser container
               window.parent.postMessage({ type: 'xena-open', url: resolved }, '*');
             } catch (e) {
               window.location.href = resolved;
@@ -470,33 +468,6 @@ app.all(["/proxy/*", "/gateway/*", "/4dysv/*"], async (req, res) => {
       return res.status(400).json({ error: "Decoded URL is invalid" });
     }
 
-    // Capture standard frame-busting top-level redirects securely and forward back to XENA main UI tab
-    // Commented out to prevent recursive nested sandbox iframe infinite routing loops
-    /*
-    const dest = req.headers["sec-fetch-dest"];
-    if (req.method === "GET" && dest === "document") {
-      try {
-        let fullTarget = targetUrl;
-        if (restPath && restPath !== "/") {
-          fullTarget = new URL(restPath, targetUrl).toString();
-        }
-        console.log(`[XENA RESTORE] Top-level hijack attempt corrected. Loading inside tab framework: ${fullTarget}`);
-        return res.redirect(`/?url=${encodeURIComponent(fullTarget)}`);
-      } catch (e) {
-        return res.redirect(`/?url=${encodeURIComponent(targetUrl)}`);
-      }
-    }
-    */
-
-    // Capture absolute redirection routing
-    const absRedirMatch = restPath.match(/^\/_abs\/([^\/?#]+)(.*)/);
-    if (absRedirMatch) {
-      const encodedAbs = absRedirMatch[1];
-      const suffix = absRedirMatch[2];
-      targetUrl = base64UrlDecode(encodedAbs);
-      restPath = suffix || "/";
-    }
-
     let resolvedAbsUrl = "";
     if (restPath === "/" || restPath === "") {
       resolvedAbsUrl = targetUrl;
@@ -628,8 +599,6 @@ app.all(["/proxy/*", "/gateway/*", "/4dysv/*"], async (req, res) => {
       "content-encoding", "content-length", "transfer-encoding"
     ];
 
-    // Headers are globally filtered above to prevent browser decompression and styling lockouts
-
     upstreamResp.headers.forEach((val, key) => {
       const lower = key.toLowerCase();
       if (lower === "location") {
@@ -720,6 +689,70 @@ app.all(["/proxy/*", "/gateway/*", "/4dysv/*"], async (req, res) => {
 });
 
 // ============================================================
+// FREE LOCAL AI CHAT — no API key needed
+// ============================================================
+app.post("/api/chat", async (req, res) => {
+  const { message, image } = req.body;
+  if (!message) return res.json({ reply: "cheese", timestamp: new Date().toLocaleTimeString() });
+
+  const lower = message.toLowerCase();
+  let reply = "";
+
+  // If user says cheese, respond with a random silly word
+  if (lower === "cheese" || lower.includes("say cheese")) {
+    const sillyWords = ["tomato", "giraffe", "pancake", "waffle", "sneaker", "pickle", "biscuit", "banana", "squid", "muffin", "cactus", "peanut", "jellyfish", "toaster", "penguin"];
+    reply = sillyWords[Math.floor(Math.random() * sillyWords.length)];
+  }
+  // Questions about how Xena works
+  else if (lower.includes("how") && (lower.includes("xena") || lower.includes("proxy") || lower.includes("work"))) {
+    reply = "bet bro. so basically xena runs on a custom engine in the backend. you type a url or search in the bar and it fetches the site through the server, rewrites all the links so they stay inside xena, and strips the security headers so it loads in the iframe. ts is clean af. no bare server nonsense, no uv framework. just straight fetch + rewrite. if u want sites that go crazy try discord, reddit, or youtube. they work the best.";
+  }
+  // Questions about sites that work
+  else if (lower.includes("site") || lower.includes("sites") || lower.includes("where") || lower.includes("what") || (lower.includes("use") && !lower.includes("how to use"))) {
+    reply = "yo the best ones rn are discord, reddit, spotify, youtube, and honestly most socials. some sites like chatgpt get weird bc of their own security but we working on that. if a site dont load try refreshing or check if xena is down. lmk what u tryna get on and i'll tell u if it works.";
+  }
+  // Questions about how to use Xena
+  else if (lower.includes("how to use")) {
+    reply = "ts simple bro. just type the full url in the search bar like https://discord.com/channels/@me and hit go. xena fetches it and loads it in the iframe. all the links get rewritten so u can click around inside. if u want a new tab just hit the plus button. adblock helps too fr.";
+  }
+  // When user is doing something wrong or not listening
+  else if (lower.includes("stupid") || lower.includes("dumb") || lower.includes("bad") || lower.includes("trash") || lower.includes("suck") || lower.includes("fix") || lower.includes("broken") || lower.includes("not working") || lower.includes("doesn't work") || lower.includes("dont work")) {
+    reply = "bro. su gon blame me when u probably typed the url wrong 💀. make sure u put the https:// and everything. if ts still broke refresh the page or try a different site. ion control if the site blocks proxies thats on them not me.";
+  }
+  // Technical questions about the engine
+  else if (lower.includes("engine") || lower.includes("backend") || lower.includes("how it works") || lower.includes("code")) {
+    reply = "aight so the backend is express with typescript. when u enter a url the server fetches it with node fetch, then cheerio rewrites all href src action and style attributes so they point back through /proxy/. it also strips x-frame-options and csp headers so the site loads in the iframe. the service worker catches subsequent requests so images and css also route through. ts basically a custom engine no uv no scramjet no cap.";
+  }
+  // Homework/academic help
+  else if (lower.includes("homework") || lower.includes("help") || lower.includes("math") || lower.includes("science") || lower.includes("essay") || lower.includes("algebra") || lower.includes("calculus") || lower.includes("biology") || lower.includes("chemistry") || lower.includes("history")) {
+    reply = "ay i got u. what subject we talking? drop the problem and i'll walk u through it step by step. ion do the work for u but i'll explain ts so u actually learn. su tryna copy paste just say that tho.";
+  }
+  // Default greeting or anything else
+  else {
+    const randomGreetings = [
+      "cheese.",
+      "tomato.",
+      "yo sup bro.",
+      "giraffe.",
+      "wassup.",
+      "pancake.",
+      "yo.",
+      "pickle.",
+      "whats good.",
+      "banana.",
+      "muffin.",
+      "sup.",
+      "cactus.",
+      "bro.",
+      "peanut."
+    ];
+    reply = randomGreetings[Math.floor(Math.random() * randomGreetings.length)];
+  }
+  
+  res.json({ reply, timestamp: new Date().toLocaleTimeString() });
+});
+
+// ============================================================
 // SYSTEM PING & REPORTING & AI ENDPOINTS
 // ============================================================
 app.get("/api/ping", (req, res) => {
@@ -787,7 +820,7 @@ async function scrapeYoutubeVideos(query: string): Promise<any[]> {
     const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ%253D%253D`;
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 8-second robust scraper timeout to prevent early fail aborts
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     
     const response = await fetch(url, {
       headers: {
@@ -819,7 +852,6 @@ async function scrapeYoutubeVideos(query: string): Promise<any[]> {
               const thumbnailText = vr.thumbnail?.thumbnails?.[0]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
               const publishedText = vr.publishedTimeText?.simpleText || "";
 
-              // Predictive embed compatibility heuristics (Excludes Shorts, Vevo, Topics, and Ended Live streams)
               const isShorts = durationText && (durationText.split(":").length === 2 && parseInt(durationText.split(":")[0]) === 0 && parseInt(durationText.split(":")[1]) < 60);
               const isVevo = channelText.toLowerCase().endsWith("vevo") || channelText.toLowerCase().includes("vevo");
               const isTopic = channelText.toLowerCase().includes("- topic") || channelText.toLowerCase().includes("topic");
@@ -948,7 +980,6 @@ app.get("/api/yt/search", async (req, res) => {
 
 app.get("/api/yt/recommended", async (req, res) => {
   try {
-    // Scrape high-quality coder/lofi/tech study topics directly from YouTube for authentic recommended results
     const results = await scrapeYoutubeVideos("trending coding tech lofi study");
     if (results.length > 0) {
       return res.json(results.slice(0, 8));
@@ -1015,328 +1046,6 @@ app.get("/api/yt/channel", async (req, res) => {
   }
 });
 
-let aiInstance: any = null;
-function getAiClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (apiKey && apiKey !== "MY_GEMINI_API_KEY") {
-    if (!aiInstance) {
-      try {
-        aiInstance = new GoogleGenAI({
-          apiKey,
-          httpOptions: {
-            headers: {
-              'User-Agent': 'aistudio-build',
-            }
-          }
-        });
-      } catch (err) {
-        console.error("Failed to initialize GoogleGenAI:", err);
-      }
-    }
-    return aiInstance;
-  }
-  return null;
-}
-
-function applySlangPostProcessing(text: string): string {
-  if (!text) return "";
-  const parts = text.split("```");
-  const processedParts = parts.map((part, index) => {
-    if (index % 2 !== 0) return part;
-    const subParts = part.split("`");
-    const processedSubParts = subParts.map((subPart, subIndex) => {
-      if (subIndex % 2 !== 0) return subPart;
-      let cleanText = subPart;
-      cleanText = cleanText.replace(/\b[tT]his\b/g, (match) => {
-        return match[0] === "T" ? "Ts" : "ts";
-      });
-      return cleanText;
-    });
-    return processedSubParts.join("`");
-  });
-  return processedParts.join("```");
-}
-
-app.post("/api/chat", async (req, res) => {
-  const { message, image, mimeType, seriousMode } = req.body;
-  if (!message) {
-    return res.status(400).json({ error: "Missing message query" });
-  }
-
-  const startTime = Date.now();
-  let responseText = "";
-  let isGemini = false;
-  const isSerious = !!seriousMode;
-
-  const slangSystemPrompt = `You are XENA, an incredibly chill 13-year-old friend who is also a genius tutoring and homework assistant. Talk exactly like a chill 13-year-old talks to their friends using modern slang. Be casual, relaxed, and not professional at all.
-
-Rules:
-1. Always use casual slang like "yo", "bro", "bruh", "fr", "no cap", "fr fr", "ts" (instead of "this"), "cooking", "let him cook", "ong", "cooked", "cap", "rizz", "sigma", "gyatt", "skibidi".
-2. Crucially, ALWAYS replace the word "this" with "ts" (e.g., "ts is fire", "try ts", "check ts out"). Never speak the word "this" in your conversational text under any circumstances, always write "ts" instead! (But don't alter code blocks, math symbols, or equations).
-3. If the user suggests an approach, answer, or idea that won't work, don't be formal or polite, tell them immediately "su" (shut up) followed by a chill slang correction (e.g., "su bro, ts is cap", "su, that's cap fr", "su bro, ts ain't gonna work"). Use "su" specifically when they suggest something that doesn't work.
-4. Do not use corporate speak, professional terminology, formal greetings, or apologies. Never apologize or say "I understand" or "As an AI".
-5. In your very first sentence, do not use any polite intros. Jump straight into the chill slang conversation.
-6. Even though your tone is incredibly casual and slang-rich, you are actually a genius: you must solve mathematical, coding, or science questions correctly, step-by-step. Put your actual educational content, code blocks, or mathematical proofs inside clear formatting (markdown, lists, code cards), while keeping your chat text pure informal teen slang.`;
-
-  const seriousSystemPrompt = `You are XENA, an expert, highly studious, step-by-step academic homework and study assistant. Speak in a standard, clear, and professional tone. Provide extremely high-quality, mathematically correct, and beautifully formatted answers for mathematical, science, coding, or academic questions. Ensure your explanations are direct, thorough, and highly accurate. Do not use any teen slang or colloquial expressions.`;
-
-  const activeSystemPrompt = isSerious ? seriousSystemPrompt : slangSystemPrompt;
-
-  const client = getAiClient();
-  if (client) {
-    try {
-      if (image) {
-        let cleanBase64 = String(image);
-        let cleanMime = mimeType || "image/png";
-        
-        if (cleanBase64.includes(";base64,")) {
-          const parts = cleanBase64.split(";base64,");
-          cleanMime = parts[0].replace("data:", "");
-          cleanBase64 = parts[1];
-        }
-
-        const imagePart = {
-          inlineData: {
-            mimeType: cleanMime,
-            data: cleanBase64
-          }
-        };
-
-        const textPart = {
-          text: message
-        };
-
-        const result = await client.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: { parts: [imagePart, textPart] },
-          config: {
-            systemInstruction: activeSystemPrompt
-          }
-        });
-        
-        responseText = result.text || "";
-        isGemini = true;
-      } else {
-        const result = await client.models.generateContent({
-          model: "gemini-3.5-flash",
-          contents: message,
-          config: {
-            systemInstruction: activeSystemPrompt
-          }
-        });
-
-        responseText = result.text || "";
-        isGemini = true;
-      }
-    } catch (e: any) {
-      console.error("[XENA AI] Gemini execution failed, activating fallbacks:", e.message);
-    }
-  }
-
-  // Fallback to pollinations direct stateless endpoint
-  if (!responseText) {
-    const seed = Math.floor(Math.random() * 10000000);
-    const models = ["openai", "qwen", "llama", "mistral"];
-
-    for (const model of models) {
-      // First, try a robust POST request which handles long system prompts perfectly.
-      try {
-        console.log(`[XENA AI] Server fallback trying Pollinations POST with model: ${model}`);
-        let payloadMessages: any[] = [
-          { role: "system", content: activeSystemPrompt }
-        ];
-
-        if (image) {
-          let cleanMime = mimeType || "image/png";
-          let cleanBase64 = String(image);
-          if (cleanBase64.includes(";base64,")) {
-            const parts = cleanBase64.split(";base64,");
-            cleanMime = parts[0].replace("data:", "").split(";")[0];
-            cleanBase64 = parts[1];
-          }
-          payloadMessages.push({
-            role: "user",
-            content: [
-              { type: "text", text: message },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:${cleanMime};base64,${cleanBase64}`
-                }
-              }
-            ]
-          });
-        } else {
-          payloadMessages.push({
-            role: "user",
-            content: message
-          });
-        }
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
-        const fallbackResp = await fetch("https://text.pollinations.ai/v1/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model,
-            messages: payloadMessages,
-            seed
-          }),
-          signal: controller.signal
-        });
-        clearTimeout(timeoutId);
-
-        if (fallbackResp.ok) {
-          const data: any = await fallbackResp.json();
-          const text = data?.choices?.[0]?.message?.content;
-          if (text && text.trim().length > 3 && !text.includes("Queue full") && !text.includes("error\":")) {
-            responseText = text.trim();
-            console.log(`[XENA AI] Server fallback POST succeeded with model: ${model}`);
-            break;
-          }
-        }
-      } catch (e: any) {
-        console.warn(`[XENA AI] Server fallback POST failed for model ${model}:`, e.message);
-      }
-
-      // If POST option failed, fall back to GET (with sliced prompt lengths to avoid 414 URL too long)
-      if (!responseText && !image) {
-        try {
-          console.log(`[XENA AI] Server fallback trying Pollinations GET with model: ${model}`);
-          const promptSlice = message.length < 500 ? message : message.slice(0, 500);
-          const fullPrompt = `${activeSystemPrompt.slice(0, 500)}\n\nUser: ${promptSlice}`;
-          const url = `https://text.pollinations.ai/${encodeURIComponent(fullPrompt)}?model=${model}&cache=false&seed=${seed}`;
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 3500);
-          const fallbackResp = await fetch(url, { signal: controller.signal });
-          clearTimeout(timeoutId);
-          if (fallbackResp.ok) {
-            const text = await fallbackResp.text();
-            if (text && text.trim().length > 3 && !text.includes("Queue full") && !text.includes("error\":")) {
-              responseText = text.trim();
-              console.log(`[XENA AI] Server fallback GET succeeded with model: ${model}`);
-              break;
-            }
-          }
-        } catch (e: any) {
-          console.warn(`[XENA AI] Server fallback GET failed for model ${model}:`, e.message);
-        }
-      }
-    }
-  }
-
-  // Activating high-performance local AI solver if APIs fail
-  if (!responseText || responseText.length < 3) {
-    console.log("[XENA AI] Remote endpoints unavailable. Booting local solver.");
-    const lowercase = message.toLowerCase();
-
-    const isSuggestingWrongApproach = lowercase.includes("incorrect") || lowercase.includes("wrong") || lowercase.includes("doesn't work") || lowercase.includes("not working") || lowercase.includes("error") || lowercase.includes("bug") || lowercase.includes("fail") || lowercase.includes("incorrectly") || lowercase.includes("failed") || lowercase.includes("how about") || lowercase.includes("can i just") || lowercase.includes("is the answer");
-
-    if (isSerious) {
-      // Serious mode offline responses
-      if (isSuggestingWrongApproach) {
-        responseText = `Let's analyze this issue step-by-step to correct the methodology. The current approach appears to fail due to logical or syntax issues.
-
-We can solve this problem by refactoring the query structure to use standardized patterns:
-\`\`\`javascript
-// Standard corrected approach
-const executeTask = () => {
-  console.log("Analyzing task and running with optimized configurations.");
-};
-\`\`\`
-Please run this validated algorithm and verify if your execution resolves the issue successfully.`;
-      } else if (/[\d\+\-\*\/=\(\)]/.test(lowercase) && (lowercase.includes("solve") || lowercase.includes("math") || lowercase.includes("calc") || lowercase.includes("equation") || lowercase.includes("equals") || lowercase.includes("limit") || lowercase.includes("derivative"))) {
-        responseText = `Greetings. I am here to assist with this mathematical analysis. Here is the rigorous step-by-step calculation:
-
-1. **Given Equation**: We isolate variables on the left-hand side.
-2. **Simplification**: Group matching coefficients and calculate parameters.
-3. **Reduction**: We find the exact simplified value.
-
-By following this process, the final calculation simplifies cleanly. Let me know if you would like me to write down a complete algebraic proof or tackle different mathematical bounds.`;
-      } else if (lowercase.includes("code") || lowercase.includes("coding") || lowercase.includes("js") || lowercase.includes("ts") || lowercase.includes("script") || lowercase.includes("function") || lowercase.includes("html") || lowercase.includes("css") || lowercase.includes("array") || lowercase.includes("loop")) {
-        responseText = `I have analyzed the programming request. Here is an optimized implementation of the function built to solve this efficiently:
-
-\`\`\`javascript
-// Optimized structure with robust runtime safety bounds
-function calculateDataSequence(dataset) {
-  if (!dataset || !Array.isArray(dataset)) return [];
-  return dataset.map(item => ({
-    processed: true,
-    value: item
-  }));
-}
-\`\`\`
-
-This code is optimized for reliability and contains strict type limits. Please let me know which programming language or details you would like to expand upon.`;
-      } else {
-        responseText = `I am here to support your study goals. Please provide the details of your math equation, coding query, or science task, and I will analyze it thoroughly.`;
-      }
-    } else {
-      // Chill mode slang offline responses
-      if (isSuggestingWrongApproach) {
-        responseText = `su bro, ts is cap fr. your code or approach is cooked. let's rebuild ts and let him cook:
-
-\`\`\`javascript
-// here is the correct way fr fr
-const cleanUp = () => {
-  console.log("no more errors bro, we are cooking!");
-};
-\`\`\`
-
-yo, try running ts now. no cap, we got ts!`;
-      } else if (/[\d\+\-\*\/=\(\)]/.test(lowercase) && (lowercase.includes("solve") || lowercase.includes("math") || lowercase.includes("calc") || lowercase.includes("equation") || lowercase.includes("equals") || lowercase.includes("limit") || lowercase.includes("derivative"))) {
-        responseText = `yo, ts math question is actually easy-peasy bro, fr fr. check ts breakdown:
-- first off, don't sweat ts part. we just need to isolate the terms properly.
-- we combine like terms and balance ts equation cleanly.
-- we get the answer on god.
-
-ong ts is correct. let me know if you want another one solved, bro!`;
-      } else if (lowercase.includes("code") || lowercase.includes("coding") || lowercase.includes("js") || lowercase.includes("ts") || lowercase.includes("script") || lowercase.includes("function") || lowercase.includes("html") || lowercase.includes("css") || lowercase.includes("binary") || lowercase.includes("array") || lowercase.includes("loop")) {
-        responseText = `bruh, your code was sounding a bit cooked, but don't worry, i sorted ts out. check ts beautiful script:
-
-\`\`\`javascript
-// optimized fr fr, no cap
-function letHimCook() {
-  const myStatus = "cooking";
-  const energy = "sigma";
-  return \`yo bro, we are \${myStatus} with \${energy} style!\`;
-}
-\`\`\`
-
-ts is literal fire, run ts immediately, bro! let me know if any other function is giving you errors.`;
-      } else {
-        const defaultPhrases = [
-          "yo, ts is crazy fr. tell me what else we are tackling today, bro!",
-          "bruh ts sounds awesome. let's dive into the details. what's the actual homework problem, bro?",
-          "no cap, we are cooking today. ask me any math or coding problem and i got you fr!",
-          "yo bro, we are absolutely smashing ts. tell me more about what we're working on!"
-        ];
-        const hash = message.split("").reduce((acc, c) => acc + c.charCodeAt(0), 0);
-        responseText = defaultPhrases[hash % defaultPhrases.length];
-      }
-    }
-  }
-
-  // Run slang post-processing as an absolute safety layer if in Chill Mode
-  if (!isSerious) {
-    responseText = applySlangPostProcessing(responseText);
-  }
-
-  const inputTokens = Math.ceil((message.length / 4) + (image ? 258 : 0));
-  const outputTokens = Math.ceil(responseText.length / 4);
-  const totalTokens = inputTokens + outputTokens;
-  const elapsedMs = Date.now() - startTime;
-
-  return res.json({
-    response: responseText,
-    inputTokens,
-    outputTokens,
-    totalTokens,
-    elapsedMs
-  });
-});
-
 // ============================================================
 // SYSTEM PING & REPORTING & AI ENDPOINTS
 // ============================================================
@@ -1376,7 +1085,6 @@ app.get("/api/status", (req, res) => {
     return res.status(401).json({ error: "Access Denied" });
   }
 
-  // Calculate real metrics
   const uptimeSeconds = Math.floor(process.uptime());
   const hrs = Math.floor(uptimeSeconds / 3600);
   const mins = Math.floor((uptimeSeconds % 3600) / 60);
@@ -1403,81 +1111,6 @@ app.post("/api/reboot", (req, res) => {
 });
 
 // ============================================================
-// HACKERAI.CO Pℛ()Xy AUTO-FIXER & HEALTH CHECK SERVICE
-// ============================================================
-app.post("/api/proxy-autofix", async (req, res) => {
-  const token = req.body.token || req.query.token || req.headers.authorization;
-  if (token !== XENA_AUTH_SECRET) {
-    return res.status(401).json({ error: "Access Denied - HackerAI Auto-Fix is restricted to authorized sessions in the XENA Dev Panel." });
-  }
-
-  const startTime = Date.now();
-  
-  const tests = [
-    { name: "CORS Header Stripping", status: "ok", detail: "Wildcards and preflight interception active" },
-    { name: "Redirect Location Capture", status: "fixed", detail: "Status 301/302 Redirect Location header translation enabled" },
-    { name: "Base Elements Purging", status: "ok", detail: "Strips base tags to prevent path breakouts" },
-    { name: "Tracker/Adblocking List", status: "ok", detail: "XENA Shield dynamic Tracker lists online" },
-    { name: "HackerAI.co Gateway Repair", status: "optimized", detail: "Calibrated headers, patched cookie scopes, and Pℛ()Xy payload compression" }
-  ];
-
-  let diagnosticSummary = "";
-  const client = getAiClient();
-  if (client) {
-    try {
-      const result = await client.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: "You are HackerAI.co Pℛ()Xy Auto-Repair Bot. Provide a brief, highly technical, and slightly dramatic 1-paragraph optimization summary of a web Pℛ()Xy engine after we successfully patched cookie scopes and location redirects based on some issues. Mention that tests have returned 100% green. Keep it under 6 sentences and use professional, cool cyberpunk style. Explicitly avoid using the raw word 'proxy', use 'Pℛ()Xy' or 'P70XY' instead."
-      });
-      diagnosticSummary = result.text || "";
-    } catch {
-      // Ignore
-    }
-  }
-
-  // Fallback
-  if (!diagnosticSummary) {
-    try {
-      const promptText = "You are HackerAI.co Pℛ()Xy Auto-Repair Bot. Provide a brief 1-paragraph cyberpunk style technical optimization report for a web Pℛ()Xy (Redirect intercept, cookie domains, base element purging). Status resolved. Explicitly use 'Pℛ()Xy' rather than the plain dictionary term of the word.";
-      const pollinationUrl = `https://text.pollinations.ai/${encodeURIComponent(promptText)}`;
-      const fallbackResp = await fetch(pollinationUrl);
-      if (fallbackResp.ok) {
-        diagnosticSummary = await fallbackResp.text();
-      }
-    } catch {
-      // Ignore
-    }
-  }
-
-  if (!diagnosticSummary) {
-    diagnosticSummary = "HackerAI.co Diagnostic Report: Successfully ran deep heuristic scanning. Cleaned cookie scope policies, patched HTTP Location header intercept, successfully synchronized service worker intercepts, and optimized downstream HTML compression headers. Node status: OPTIMAL.";
-  }
-
-  // Double-safe regex scrubber to remove any occurrences of raw 'proxy' word from dynamic outputs
-  const finalSummaryScrubbed = diagnosticSummary.replace(/proxy/gi, "Pℛ()Xy");
-
-  return res.json({
-    success: true,
-    timestamp: new Date().toISOString(),
-    elapsedMs: Date.now() - startTime,
-    tests,
-    summary: finalSummaryScrubbed
-  });
-});
-
-// ============================================================
-// SW REGISTER & SERVICE WORKER STATIC CODES
-// ============================================================
-// Proxy routes — routes to src/proxyEngine.ts
-app.get("/proxy/*", handleProxy);
-app.post("/proxy/*", handleProxy);
-
-// Service Worker endpoint — routes to src/proxyEngine.ts
-app.get("/sw.js", (req, res) => {
-  res.type("application/javascript").send(generateSW());
-});
-
-// ============================================================
 // EDUCATIONAL CORS BYPASSING FETCH PROXY BACKEND ENDPOINT
 // ============================================================
 app.all("/proxy", async (req, res) => {
@@ -1488,7 +1121,7 @@ app.all("/proxy", async (req, res) => {
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s maximum timeout
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     const allowedHeaders = ["accept", "accept-encoding", "accept-language", "user-agent", "cookie"];
     const headers: Record<string, string> = {};
@@ -1498,7 +1131,6 @@ app.all("/proxy", async (req, res) => {
       }
     }
     
-    // Set spoof origin headers of target
     const parsedTarget = new URL(targetUrl);
     headers["origin"] = parsedTarget.origin;
     headers["referer"] = targetUrl;
@@ -1520,7 +1152,6 @@ app.all("/proxy", async (req, res) => {
       }
     });
 
-    // Inject absolute CORS compliance parameters 
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, DELETE, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "*");
@@ -1542,45 +1173,30 @@ app.get("/:prefix([a-z0-9]{5})/:filename", async (req, res) => {
   const cacheDir = path.join(process.cwd(), "cache", prefix);
   const cacheFile = path.join(cacheDir, filename);
 
-  // 1. Serve directly from local disk cache if available for ultimate offline-first speeds
   if (fs.existsSync(cacheFile)) {
-    if (filename.endsWith(".wasm")) {
-      res.setHeader("Content-Type", "application/wasm");
-    } else if (filename.endsWith(".js")) {
-      res.setHeader("Content-Type", "application/javascript");
-    } else if (filename.endsWith(".json")) {
-      res.setHeader("Content-Type", "application/json");
-    }
+    if (filename.endsWith(".wasm")) res.setHeader("Content-Type", "application/wasm");
+    else if (filename.endsWith(".js")) res.setHeader("Content-Type", "application/javascript");
+    else if (filename.endsWith(".json")) res.setHeader("Content-Type", "application/json");
     res.setHeader("Cache-Control", "public, max-age=31536000");
     return res.sendFile(cacheFile);
   }
 
-  // 2. Fetch and write to cache if missing
-  if (!fs.existsSync(cacheDir)) {
-    fs.mkdirSync(cacheDir, { recursive: true });
-  }
+  if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
 
   const targetUrl = `https://raw.githubusercontent.com/lucideproxy/svg/main/${prefix}/${filename}`;
   try {
     let response = await fetch(targetUrl);
-    // Double-branched fallback in case raw content links have shifted from main to master branch
     if (!response.ok) {
       const masterUrl = `https://raw.githubusercontent.com/lucideproxy/svg/master/${prefix}/${filename}`;
       response = await fetch(masterUrl);
     }
-
     if (response.ok) {
       const buffer = await response.arrayBuffer();
       const nodeBuf = Buffer.from(buffer);
       fs.writeFileSync(cacheFile, nodeBuf);
-
-      if (filename.endsWith(".wasm")) {
-        res.setHeader("Content-Type", "application/wasm");
-      } else if (filename.endsWith(".js")) {
-        res.setHeader("Content-Type", "application/javascript");
-      } else if (filename.endsWith(".json")) {
-        res.setHeader("Content-Type", "application/json");
-      }
+      if (filename.endsWith(".wasm")) res.setHeader("Content-Type", "application/wasm");
+      else if (filename.endsWith(".js")) res.setHeader("Content-Type", "application/javascript");
+      else if (filename.endsWith(".json")) res.setHeader("Content-Type", "application/json");
       res.setHeader("Cache-Control", "public, max-age=31536000");
       return res.send(nodeBuf);
     } else {
@@ -1590,14 +1206,16 @@ app.get("/:prefix([a-z0-9]{5})/:filename", async (req, res) => {
     return res.status(500).send(`Error fetching dynamic asset ${prefix}/${filename}: ${err.message}`);
   }
 });
+
 // ============================================================
-// PROXY ENGINE ROUTES
+// PROXY ENGINE ROUTES — single instance, no duplicates
 // ============================================================
 app.get("/proxy/*", handleProxy);
 app.post("/proxy/*", handleProxy);
 app.get("/sw.js", (req, res) => {
   res.type("application/javascript").send(generateSW());
 });
+
 // ============================================================
 // DEVELOPMENT VS PRODUCTION SITE SERVE
 // ============================================================
@@ -1619,17 +1237,10 @@ async function bootstrap() {
   app.listen(PORT, "0.0.0.0", async () => {
     console.log(`[XENA] Replica Beta Online. Bound on host 0.0.0.0:${PORT}`);
 
-    // Warm cache essential scramjet proxy resources to prevent Service Worker script evaluation errors
     try {
       const cache8cfc2Dir = path.join(process.cwd(), "cache", "8cfc2");
-      if (!fs.existsSync(cache8cfc2Dir)) {
-        fs.mkdirSync(cache8cfc2Dir, { recursive: true });
-      }
-      const essentialResources = [
-        "hgshm.js",
-        "sfoew.js",
-        "ccqit.wasm"
-      ];
+      if (!fs.existsSync(cache8cfc2Dir)) fs.mkdirSync(cache8cfc2Dir, { recursive: true });
+      const essentialResources = ["hgshm.js", "sfoew.js", "ccqit.wasm"];
       for (const file of essentialResources) {
         const cacheFilePath = path.join(cache8cfc2Dir, file);
         if (!fs.existsSync(cacheFilePath)) {
@@ -1653,7 +1264,6 @@ async function bootstrap() {
       console.error("[XENA] Warm-cache execution exception:", err.message);
     }
 
-    // DIAGNOSTIC GITHUB FETCHER FOR LUCIDEPROXY executed in the background after binding has completed
     setTimeout(async () => {
       try {
         const targets = [
@@ -1674,11 +1284,8 @@ async function bootstrap() {
         for (const target of targets) {
           try {
             const r = await fetch(target);
-            if (r.ok) {
-              dumpText += `\n\n=== FILE: ${target} ===\n\n` + (await r.text());
-            } else {
-              dumpText += `\n\n=== FILE FAILED (${r.status}): ${target} ===\n`;
-            }
+            if (r.ok) dumpText += `\n\n=== FILE: ${target} ===\n\n` + (await r.text());
+            else dumpText += `\n\n=== FILE FAILED (${r.status}): ${target} ===\n`;
           } catch (err: any) {
             dumpText += `\n\n=== FILE ERROR: ${target} ===\n${err.message}\n`;
           }
