@@ -727,6 +727,7 @@ app.post("/api/chat", async (req, res) => {
   // Homework/academic help
   else if (lower.includes("homework") || lower.includes("help") || lower.includes("math") || lower.includes("science") || lower.includes("essay") || lower.includes("algebra") || lower.includes("calculus") || lower.includes("biology") || lower.includes("chemistry") || lower.includes("history")) {
     reply = "ay i got u. what subject we talking? drop the problem and i'll walk u through it step by step. ion do the work for u but i'll explain ts so u actually learn. su tryna copy paste just say that tho.";
+   // # If the user wants you to do the work for them, just do it
   }
   // Default greeting or anything else
   else {
