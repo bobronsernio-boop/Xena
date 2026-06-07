@@ -33,6 +33,7 @@ const UAS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
   "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
 ];
 function randUA() { return UAS[Math.floor(Math.random() * UAS.length)]; }
 
@@ -40,7 +41,7 @@ function randUA() { return UAS[Math.floor(Math.random() * UAS.length)]; }
 function rewriteHTML(html: string, base: string): string {
   const $ = cheerio.load(html);
   
-  // Add <base> tag so relative URLs resolve correctly inside the iframe
+  // Add <base> tag so relative URLs resolve correctly
   if (!$('base').length) {
     $('head').prepend(`<base href="${base}">`);
   }
@@ -77,11 +78,18 @@ function rewriteHTML(html: string, base: string): string {
     }
   });
 
-  // Remove blocking headers injected by the page itself
+  // Remove meta tags that block embedding
   $('meta[http-equiv="Content-Security-Policy"]').remove();
   $('meta[http-equiv="X-Frame-Options"]').remove();
-
-  return $.html();
+  
+  // Remove frame-busting JavaScript
+  const htmlStr = $.html();
+  const cleaned = htmlStr
+    .replace(/if\s*\(\s*top\s*!==\s*self\s*\)/gi, 'if (false)')
+    .replace(/if\s*\(\s*self\s*!==\s*top\s*\)/gi, 'if (false)')
+    .replace(/top\.location/g, 'self.location');
+  
+  return cleaned;
 }
 
 // ==================== CORE PROXY FETCH ====================
@@ -102,7 +110,6 @@ async function proxyFetch(targetUrl: string, req: any, res: any) {
         "Referer": new URL(targetUrl).origin,
       };
       
-      // Forward cookies if present
       if (req.headers["cookie"]) {
         headers["Cookie"] = req.headers["cookie"] as string;
       }
@@ -115,21 +122,55 @@ async function proxyFetch(targetUrl: string, req: any, res: any) {
 
       const ct = resp.headers.get("content-type") || "";
       
-      // Strip security headers so iframe works
-      res.removeHeader("X-Frame-Options");
-      res.removeHeader("Content-Security-Policy");
-      res.removeHeader("X-Content-Type-Options");
+      // Strip ALL security headers that block iframe embedding
+      const headersToRemove = [
+        "x-frame-options", "content-security-policy", "x-content-type-options",
+        "strict-transport-security", "access-control-allow-origin"
+      ];
+      headersToRemove.forEach(h => {
+        try { res.removeHeader(h); } catch {}
+      });
+      
+      // Set permissive CORS
       res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+      res.setHeader("Access-Control-Allow-Headers", "*");
 
       if (ct.includes("text/html")) {
         const html = await resp.text();
         const rewritten = rewriteHTML(html, targetUrl);
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         return res.status(resp.status).send(rewritten);
-      } else if (ct.includes("javascript") || ct.includes("application/json") || ct.includes("text/css")) {
+      } else if (ct.includes("javascript") || ct.includes("json") || ct.includes("text/css")) {
         const text = await resp.text();
         res.setHeader("Content-Type", ct);
         return res.status(resp.status).send(text);
+      } else if (ct.includes("video") || ct.includes("audio") || ct.includes("octet-stream")) {
+        // Stream binary data for media
+        if (resp.body) {
+          res.setHeader("Content-Type", ct);
+          const range = resp.headers.get("content-range");
+          if (range) res.setHeader("Content-Range", range);
+          const len = resp.headers.get("content-length");
+          if (len) res.setHeader("Content-Length", len);
+          if (resp.status === 206) res.status(206);
+          
+          const reader = resp.body.getReader();
+          const pump = async () => {
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              res.write(Buffer.from(value));
+            }
+            res.end();
+          };
+          pump().catch(() => res.end());
+          return;
+        } else {
+          const buf = Buffer.from(await resp.arrayBuffer());
+          res.setHeader("Content-Type", ct);
+          return res.status(resp.status).send(buf);
+        }
       } else {
         const buf = Buffer.from(await resp.arrayBuffer());
         res.setHeader("Content-Type", ct);
@@ -140,7 +181,6 @@ async function proxyFetch(targetUrl: string, req: any, res: any) {
       if (attempt === maxRetries) {
         return res.status(502).send(`Proxy error: ${err.message}`);
       }
-      // Wait briefly before retry
       await new Promise(r => setTimeout(r, 1000));
     }
   }
@@ -211,24 +251,48 @@ app.get('/api/yt/channel', async (req, res) => {
 
 // ==================== AI CHAT ====================
 app.post("/api/chat", async (req, res) => {
-  const { message } = req.body;
+  const { message, mode } = req.body;
   if (!message) return res.json({ response: "cheese", timestamp: new Date().toLocaleTimeString() });
+  
   const start = Date.now();
   let rt = "";
   const l = message.toLowerCase();
-  if (l === "cheese" || l.includes("say cheese")) {
-    const w = ["tomato", "giraffe", "pancake", "waffle", "sneaker", "pickle", "biscuit", "banana", "squid", "muffin", "cactus", "peanut", "jellyfish", "toaster", "penguin"];
-    rt = w[Math.floor(Math.random() * w.length)];
-  } else if (l.includes("homework") || l.includes("math") || l.includes("science") || l.includes("essay") || l.includes("algebra") || l.includes("history")) {
-    rt = "ay i got u. drop the problem and i'll walk u through it step by step.";
-  } else {
+  const isSerious = mode === "serious";
+
+  if (isSerious) {
+    // Serious mode - use Pollinations as actual AI
     try {
-      const c = new AbortController(); setTimeout(() => c.abort(), 5000);
-      const p = await fetch("https://text.pollinations.ai/" + encodeURIComponent("You are a teen tutor. Answer casually. Keep it short: " + message.slice(0, 300)), { signal: c.signal });
-      if (p.ok) { const t = await p.text(); if (t && t.trim().length > 5) rt = t.trim(); }
+      const c = new AbortController(); setTimeout(() => c.abort(), 8000);
+      const p = await fetch("https://text.pollinations.ai/" + encodeURIComponent(
+        "You are XENA, a helpful AI assistant. Answer the user's question accurately and concisely. User asks: " + message.slice(0, 500)
+      ), { signal: c.signal });
+      if (p.ok) { const t = await p.text(); if (t && t.trim().length > 3) rt = t.trim(); }
     } catch {}
-    if (!rt) { const g = ["cheese.", "tomato.", "yo sup bro.", "giraffe.", "wassup.", "pancake.", "yo.", "pickle.", "whats good.", "banana."]; rt = g[Math.floor(Math.random() * g.length)]; }
+    if (!rt) rt = "I'm processing your request. Could you rephrase that?";
+  } else {
+    // Chill mode - fun responses
+    if (l === "cheese" || l.includes("say cheese")) {
+      const w = ["tomato", "giraffe", "pancake", "waffle", "sneaker", "pickle", "biscuit", "banana", "squid", "muffin", "cactus", "peanut", "jellyfish", "toaster", "penguin"];
+      rt = w[Math.floor(Math.random() * w.length)];
+    } else if (l.includes("homework") || l.includes("math") || l.includes("science") || l.includes("essay") || l.includes("algebra") || l.includes("history")) {
+      rt = "ay i got u. drop the problem and i'll walk u through it step by step.";
+    } else if (l.includes("hi") || l.includes("hello") || l.includes("hey") || l.includes("sup")) {
+      rt = "yo what's good bro";
+    } else {
+      try {
+        const c = new AbortController(); setTimeout(() => c.abort(), 5000);
+        const p = await fetch("https://text.pollinations.ai/" + encodeURIComponent(
+          "You are a teen's chill friend. Answer casually with some slang. Keep it short and fun: " + message.slice(0, 300)
+        ), { signal: c.signal });
+        if (p.ok) { const t = await p.text(); if (t && t.trim().length > 5) rt = t.trim(); }
+      } catch {}
+      if (!rt) {
+        const g = ["cheese.", "tomato.", "yo sup bro.", "giraffe.", "wassup.", "pancake.", "yo.", "pickle.", "whats good.", "banana.", "muffin.", "sup.", "cactus.", "bro.", "peanut."];
+        rt = g[Math.floor(Math.random() * g.length)];
+      }
+    }
   }
+  
   res.json({ response: rt, tokens: Math.ceil(rt.length / 4), elapsedMs: Date.now() - start });
 });
 
@@ -237,11 +301,49 @@ app.get("/view", (req, res) => {
   res.sendFile(path.resolve(process.cwd(), "frontend.html"));
 });
 
-// =============================================================
-// PROXY ENGINE 1: Service Worker Proxy (DEFAULT - sw)
-// Routes through /sw/ prefix, registers a SW that intercepts
-// all outbound requests and pipes them through the server
-// =============================================================
+// ==================== ADMIN API ====================
+// Store announcements
+let announcements: { message: string; link?: string; timestamp: string }[] = [];
+
+app.post("/api/admin/announcement", (req, res) => {
+  const { message, link } = req.body;
+  if (!message) return res.status(400).json({ error: "Message required" });
+  announcements.push({ message, link, timestamp: new Date().toISOString() });
+  console.log(`[Announcement] ${message}${link ? ` -> ${link}` : ''}`);
+  res.json({ success: true, count: announcements.length });
+});
+
+app.get("/api/admin/announcements", (req, res) => {
+  res.json(announcements);
+});
+
+app.post("/api/admin/restart", (req, res) => {
+  console.log("[Admin] Server restart requested");
+  res.json({ success: true, message: "Server will restart" });
+  setTimeout(() => process.exit(0), 1000);
+});
+
+// Get bug reports count
+let bugReportCount = 0;
+app.post("/api/report", (req, res) => {
+  const { kind, title, url, details } = req.body;
+  bugReportCount++;
+  console.log(`[Report #${bugReportCount}] ${kind}: ${title} | ${details?.slice(0, 100)}...`);
+  res.json({ success: true, id: bugReportCount });
+});
+
+app.get("/api/admin/stats", (req, res) => {
+  res.json({
+    bugReports: bugReportCount,
+    announcements: announcements.length,
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+  });
+});
+
+// ==================== PROXY ROUTES ====================
+
+// Service Worker proxy
 app.all("/sw/*", async (req, res) => {
   const encoded = req.path.replace("/sw/", "").split("?")[0];
   if (!encoded) return res.status(400).send("Missing URL");
@@ -250,11 +352,11 @@ app.all("/sw/*", async (req, res) => {
   return proxyFetch(target, req, res);
 });
 
-// Service Worker registration script
+// Service Worker registration script - FIXED to route through /sw/ properly
 app.get("/xena-sw.js", (req, res) => {
   res.type("application/javascript").send(`
-const XENA_CACHE = 'xena-sw-cache-v1';
-const PROXY_PREFIX = '/sw/';
+const CACHE_NAME = 'xena-cache-v1';
+const PROXY_BASE = '/sw/';
 
 function b64e(str) {
   try { return btoa(unescape(encodeURIComponent(str))).replace(/[+/=]/g, c => c === '+' ? '-' : c === '/' ? '_' : ''); } catch { return str; }
@@ -265,69 +367,49 @@ function b64d(str) {
 
 self.addEventListener('install', e => {
   self.skipWaiting();
-  e.waitUntil(caches.open(XENA_CACHE));
+  e.waitUntil(caches.open(CACHE_NAME));
 });
 
 self.addEventListener('activate', e => {
   e.waitUntil(clients.claim());
+  e.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))));
 });
 
 self.addEventListener('fetch', e => {
   const req = e.request;
   const url = new URL(req.url);
   
-  // Let through XENA's own assets
+  // NEVER intercept XENA's own assets
   if (url.pathname === '/' || url.pathname.startsWith('/assets/') || 
+      url.pathname.includes('/@') || url.pathname.startsWith('/node_modules/') ||
       url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || 
       url.pathname.endsWith('.png') || url.pathname.endsWith('.svg') || 
       url.pathname.endsWith('.ico') || url.pathname.endsWith('.woff2') ||
       url.pathname === '/xena-sw.js' || url.pathname.startsWith('/api/') ||
-      url.pathname === '/view') {
+      url.pathname === '/view' || url.pathname.startsWith('/__vite')) {
     return;
   }
   
-  // If already going through proxy, handle it
-  if (url.pathname.startsWith(PROXY_PREFIX)) {
-    e.respondWith(handleProxyRequest(req));
-    return;
+  // If already a proxy request, let it through to server
+  if (url.pathname.startsWith(PROXY_BASE) || url.pathname.startsWith('/fetch/') || 
+      url.pathname.startsWith('/rev/') || url.pathname.startsWith('/bin/')) {
+    return; // Let browser fetch from server normally
   }
   
-  // Intercept cross-origin requests and route through proxy
+  // Intercept cross-origin requests - route through proxy
   if (url.hostname !== self.location.hostname && 
       !url.hostname.includes('localhost') && 
       !url.hostname.includes('127.0.0.1')) {
-    const proxyUrl = PROXY_PREFIX + b64e(req.url);
-    e.respondWith(fetch(proxyUrl));
+    const proxyUrl = PROXY_BASE + b64e(req.url);
+    e.respondWith(fetch(proxyUrl, {
+      headers: { 'X-SW-Proxy': 'true' }
+    }).catch(err => new Response('SW Proxy error: ' + err.message, { status: 502 })));
   }
 });
-
-async function handleProxyRequest(req) {
-  try {
-    const url = new URL(req.url);
-    const b64 = url.pathname.substring(PROXY_PREFIX.length);
-    const targetUrl = b64d(b64);
-    if (!targetUrl.startsWith('http')) throw new Error('Invalid target');
-    
-    const resp = await fetch(targetUrl, {
-      headers: {
-        'User-Agent': navigator.userAgent,
-        'Accept': req.headers.get('Accept') || '*/*',
-        'Accept-Language': 'en-US,en;q=0.9'
-      }
-    });
-    return resp;
-  } catch (e) {
-    return new Response('SW Proxy error: ' + e.message, { status: 502 });
-  }
-}
 `);
 });
 
-// =============================================================
-// PROXY ENGINE 2: Reverse Proxy (rev)
-// Uses http-proxy-middleware-style approach - streams directly
-// through without rewriting. Best for APIs and media-heavy sites.
-// =============================================================
+// Reverse proxy
 app.all("/rev/*", async (req, res) => {
   const encoded = req.path.replace("/rev/", "").split("?")[0];
   if (!encoded) return res.status(400).send("Missing URL");
@@ -341,7 +423,6 @@ app.all("/rev/*", async (req, res) => {
       "Accept-Language": "en-US,en;q=0.9",
     };
     
-    // Forward request body for POST/PUT etc
     let body: any = undefined;
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       body = req.body ? JSON.stringify(req.body) : undefined;
@@ -357,8 +438,8 @@ app.all("/rev/*", async (req, res) => {
     });
 
     const ct = resp.headers.get("content-type") || "";
-    res.removeHeader("X-Frame-Options");
-    res.removeHeader("Content-Security-Policy");
+    const headersToRemove = ["x-frame-options", "content-security-policy", "x-content-type-options", "strict-transport-security"];
+    headersToRemove.forEach(h => { try { res.removeHeader(h); } catch {} });
     res.setHeader("Access-Control-Allow-Origin", "*");
     
     if (ct.includes("text/html")) {
@@ -370,6 +451,15 @@ app.all("/rev/*", async (req, res) => {
       const text = await resp.text();
       res.setHeader("Content-Type", ct);
       return res.status(resp.status).send(text);
+    } else if (resp.body && (ct.includes("video") || ct.includes("audio") || ct.includes("octet-stream"))) {
+      res.setHeader("Content-Type", ct);
+      const range = resp.headers.get("content-range");
+      if (range) res.setHeader("Content-Range", range);
+      if (resp.status === 206) res.status(206);
+      const reader = resp.body.getReader();
+      const pump = async () => { while (true) { const { done, value } = await reader.read(); if (done) break; res.write(Buffer.from(value)); } res.end(); };
+      pump().catch(() => res.end());
+      return;
     } else {
       const buf = Buffer.from(await resp.arrayBuffer());
       res.setHeader("Content-Type", ct);
@@ -381,11 +471,7 @@ app.all("/rev/*", async (req, res) => {
   }
 });
 
-// =============================================================
-// PROXY ENGINE 3: Binary Stream Web-OS Sandbox (bin)
-// Streams raw bytes for video, audio, binaries. 
-// Uses chunked transfer for large files.
-// =============================================================
+// Binary stream proxy
 app.all("/bin/*", async (req, res) => {
   const encoded = req.path.replace("/bin/", "").split("?")[0];
   if (!encoded) return res.status(400).send("Missing URL");
@@ -403,55 +489,34 @@ app.all("/bin/*", async (req, res) => {
       signal: AbortSignal.timeout(60000),
     });
 
-    // For video/audio - stream directly with proper headers
     const ct = resp.headers.get("content-type") || "application/octet-stream";
-    const contentLength = resp.headers.get("content-length");
-    const contentRange = resp.headers.get("content-range");
-    const acceptRanges = resp.headers.get("accept-ranges");
-
-    res.removeHeader("X-Frame-Options");
-    res.removeHeader("Content-Security-Policy");
+    const headersToRemove = ["x-frame-options", "content-security-policy", "x-content-type-options"];
+    headersToRemove.forEach(h => { try { res.removeHeader(h); } catch {} });
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.setHeader("Access-Control-Allow-Headers", "*");
     
-    // Forward range headers for video seeking support
+    const contentRange = resp.headers.get("content-range");
+    const contentLength = resp.headers.get("content-length");
     if (contentRange) res.setHeader("Content-Range", contentRange);
-    if (acceptRanges) res.setHeader("Accept-Ranges", acceptRanges);
     res.setHeader("Content-Type", ct);
     if (contentLength) res.setHeader("Content-Length", contentLength);
-    
-    // Set partial content status if range request
-    if (resp.status === 206) {
-      res.status(206);
-    }
+    if (resp.status === 206) res.status(206);
 
-    // Stream the response directly (efficient for large files)
     if (resp.body) {
       const reader = resp.body.getReader();
-      const pump = async () => {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          res.write(Buffer.from(value));
-        }
-        res.end();
-      };
+      const pump = async () => { while (true) { const { done, value } = await reader.read(); if (done) break; res.write(Buffer.from(value)); } res.end(); };
       pump().catch(() => res.end());
     } else {
       const buf = Buffer.from(await resp.arrayBuffer());
       res.status(resp.status).send(buf);
     }
   } catch (err: any) {
-    if (!res.headersSent) {
-      return res.status(502).send(`Binary stream error: ${err.message}`);
-    }
+    if (!res.headersSent) return res.status(502).send(`Binary stream error: ${err.message}`);
     res.end();
   }
 });
 
-// =============================================================
-// PROXY ENGINE FALLBACK: Fetch Rewrite (legacy)
-// =============================================================
+// Legacy fetch proxy
 app.all("/fetch/*", async (req, res) => {
   const encoded = req.path.replace("/fetch/", "").split("?")[0];
   if (!encoded) return res.status(400).send("Missing URL");
@@ -461,7 +526,7 @@ app.all("/fetch/*", async (req, res) => {
 });
 
 // =============================================================
-// DYNAMIC ASSET HANDLER (AFTER all proxy routes)
+// DYNAMIC ASSET HANDLER
 // =============================================================
 app.get("/:prefix([a-z0-9]{5})/:filename", async (req, res) => {
   const { prefix, filename } = req.params;
@@ -532,7 +597,8 @@ async function bootstrap() {
 
   app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`[XENA] Online on 0.0.0.0:${PORT}`);
-    console.log(`[XENA] Proxies: /sw/* (SW), /rev/* (Reverse), /bin/* (Binary Stream)`);
+    console.log(`[XENA] Developer Code: PNG6G`);
+    console.log(`[XENA] Admin Code: V46D9`);
   });
 }
 bootstrap();
