@@ -28,39 +28,62 @@ function rewriteHtml(html: string, baseUrl: string): string {
   $("a[href]").each((_, el) => {
     const href = $(el).attr("href");
     if (href && !href.startsWith("#") && !href.startsWith("javascript:")) {
-      try { const absolute = new URL(href, baseUrl).href; $(el).attr("href", `${PROXY_PREFIX}/${b64UrlEncode(absolute)}`); } catch {}
+      try {
+        const absolute = new URL(href, baseUrl).href;
+        $(el).attr("href", `${PROXY_PREFIX}/${b64UrlEncode(absolute)}`);
+      } catch {}
     }
   });
   $("form[action]").each((_, el) => {
     const action = $(el).attr("action");
     if (action) {
-      try { const absolute = new URL(action, baseUrl).href; $(el).attr("action", `${PROXY_PREFIX}/${b64UrlEncode(absolute)}`); } catch {}
+      try {
+        const absolute = new URL(action, baseUrl).href;
+        $(el).attr("action", `${PROXY_PREFIX}/${b64UrlEncode(absolute)}`);
+      } catch {}
     }
   });
   $("img[src]").each((_, el) => {
     const src = $(el).attr("src");
     if (src) {
-      try { const absolute = new URL(src, baseUrl).href; $(el).attr("src", `${PROXY_PREFIX}/${b64UrlEncode(absolute)}`); } catch {}
+      try {
+        const absolute = new URL(src, baseUrl).href;
+        $(el).attr("src", `${PROXY_PREFIX}/${b64UrlEncode(absolute)}`);
+      } catch {}
     }
   });
   $("script[src]").each((_, el) => {
     const src = $(el).attr("src");
     if (src) {
-      try { const absolute = new URL(src, baseUrl).href; $(el).attr("src", `${PROXY_PREFIX}/${b64UrlEncode(absolute)}`); } catch {}
+      try {
+        const absolute = new URL(src, baseUrl).href;
+        $(el).attr("src", `${PROXY_PREFIX}/${b64UrlEncode(absolute)}`);
+      } catch {}
     }
   });
   $("link[href]").each((_, el) => {
     const href = $(el).attr("href");
     if (href) {
-      try { const absolute = new URL(href, baseUrl).href; $(el).attr("href", `${PROXY_PREFIX}/${b64UrlEncode(absolute)}`); } catch {}
+      try {
+        const absolute = new URL(href, baseUrl).href;
+        $(el).attr("href", `${PROXY_PREFIX}/${b64UrlEncode(absolute)}`);
+      } catch {}
     }
   });
   $("[style]").each((_, el) => {
     const style = $(el).attr("style");
     if (style && style.includes("url(")) {
-      $(el).attr("style", style.replace(/url\(['"]?([^'")\s]+)['"]?\)/g, (_match: string, url: string) => {
-        try { const absolute = new URL(url, baseUrl).href; return `url(${PROXY_PREFIX}/${b64UrlEncode(absolute)})`; } catch { return _match; }
-      }));
+      $(el).attr(
+        "style",
+        style.replace(/url\(['"]?([^'")\s]+)['"]?\)/g, (_match: string, url: string) => {
+          try {
+            const absolute = new URL(url, baseUrl).href;
+            return `url(${PROXY_PREFIX}/${b64UrlEncode(absolute)})`;
+          } catch {
+            return _match;
+          }
+        })
+      );
     }
   });
 
@@ -83,7 +106,11 @@ export async function handleProxy(req: Request, res: Response): Promise<void> {
   }
   try {
     const response = await fetch(targetUrl, {
-      headers: { "User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "en-US,en;q=0.5" },
+      headers: {
+        "User-Agent": USER_AGENT,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+      },
       redirect: "follow",
     });
     const contentType = response.headers.get("content-type") || "";
