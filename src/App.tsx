@@ -321,4 +321,149 @@ export default function App() {
           <div className="flex min-h-[44px] rounded-lg border border-zinc-800 bg-black overflow-hidden focus-within:border-zinc-500 items-center">
             <button type="button" onClick={()=>fileInputRef.current?.click()} className="px-2.5 h-10 flex items-center justify-center text-zinc-400 hover:text-white cursor-pointer" title="Attach image"><Plus className="w-4 h-4"/></button>
             <textarea value={chatInput} onChange={e=>setChatInput(e.target.value)} onPaste={handleChatPaste} onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendAIMessage();}}} placeholder="Query the internal neural cell..." className="flex-1 px-1 py-2 bg-transparent outline-none text-xs text-white placeholder-zinc-600 resize-none max-h-32 min-h-[22px]" rows={1}/>
-            <button type="submit" disabled={(!chatInput.trim
+            <button type="submit" disabled={(!chatInput.trim()&&!attachedImage)||aiLoading} className="px-3 h-11 flex items-center justify-center bg-zinc-900 border-l border-zinc-850 hover:bg-zinc-800 disabled:bg-black disabled:text-zinc-700 text-white transition-all duration-150 cursor-pointer"><Send className="w-3.5 h-3.5"/></button>
+          </div>
+        </form>
+      </section>
+
+      {/* SETTINGS MODAL */}
+      {modal==="settings"&&(
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-[#050505] border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-850 bg-black">
+              <span className="font-semibold text-xs tracking-wider text-white uppercase flex items-center gap-1.5"><Settings className="w-3.5 h-3.5 text-zinc-400"/> SYSTEM CONTROL CENTER</span>
+              <button onClick={()=>setModal(null)} className="text-zinc-500 hover:text-white cursor-pointer"><X className="w-4 h-4"/></button>
+            </header>
+            <div className="flex border-b border-zinc-900 bg-black px-1">
+              {["general","search","ai","autofix"].map(t=>(
+                <button key={t} onClick={()=>setSettingsTab(t as any)} className={`flex-1 py-2 text-[9px] font-mono tracking-wider uppercase border-b-2 text-center transition-all ${settingsTab===t?"border-white text-white font-bold":"border-transparent text-zinc-500 hover:text-zinc-300"}`}>{t==="general"?"Stealth":t==="search"?"History Logs":t==="ai"?"AI Threads":"HackerAI"}</button>
+              ))}
+            </div>
+            <div className="p-4 space-y-4 overflow-y-auto flex-1 no-scrollbar bg-[#050505]">
+              {settingsTab==="general"&&(
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-[9px] font-mono tracking-wider text-zinc-500 mb-1.5 uppercase">Proxy Passkey</label>
+                    <div className="flex gap-2">
+                      <input type="password" value={proxyKey} onChange={e=>setProxyKey(e.target.value)} placeholder="Enter passkey..." className="flex-1 h-9 rounded-lg border border-zinc-800 bg-black px-3 text-xs text-white focus:border-zinc-500 outline-none"/>
+                      <button onClick={()=>{localStorage.setItem("xena_proxy_key",proxyKey);alert("Saved!");}} className="h-9 px-3.5 rounded-lg bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-white text-xs font-semibold cursor-pointer">Save</button>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-zinc-850 bg-black">
+                    <div><span className="block text-xs font-semibold text-zinc-200">Classroom Stealth Mode</span><span className="block text-[10px] text-zinc-500 mt-0.5 font-mono">Disguises tab title as Google Classroom</span></div>
+                    <button onClick={()=>setCloakActive(!cloakActive)} className={`px-3 py-1 rounded-md text-[10px] font-semibold tracking-wider font-mono transition-all ${cloakActive?"bg-white/10 text-white border border-zinc-700":"bg-zinc-950 text-zinc-600"}`}>{cloakActive?"ACTIVE":"DISABLED"}</button>
+                  </div>
+                  <div className="p-3 rounded-lg border border-zinc-850 bg-black space-y-2">
+                    <span className="block text-xs font-semibold text-zinc-200">Stealth Frame Launchers</span>
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <button onClick={()=>{try{const w=window.open('about:blank','_blank');if(w){w.document.write(`<html style="margin:0;padding:0;width:100%;height:100%;overflow:hidden;"><head><title>Google Classroom</title></head><body style="margin:0;padding:0;width:100%;height:100%;overflow:hidden;"><iframe src="${window.location.origin}/" style="position:fixed;top:0;left:0;bottom:0;right:0;width:100%;height:100%;border:none;margin:0;padding:0;overflow:hidden;z-index:999999;"></iframe></body></html>`);w.document.close();}else alert("Popup blocked!");}catch{}} className="py-1.5 px-3 rounded-md text-[9px] font-mono font-semibold tracking-wider bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 hover:text-white cursor-pointer text-center">OPEN IN ABOUT:BLANK</button>
+                      <button onClick={()=>{try{const h=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Google Classroom</title><style>body,html{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000;}iframe{width:100%;height:100%;border:none;position:fixed;top:0;left:0;bottom:0;right:0;}</style></head><body><iframe src="${window.location.origin}/"></iframe></body></html>`;const b=new Blob([h],{type:"text/html"});const u=URL.createObjectURL(b);window.open(u,"_blank");}catch{}} className="py-1.5 px-3 rounded-md text-[9px] font-mono font-semibold tracking-wider bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-zinc-300 hover:text-white cursor-pointer text-center">OPEN IN BLOB:URL</button>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    <span className="block text-[9px] font-mono tracking-wider text-zinc-500 uppercase">Panic Escape Code</span>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div><label className="block text-[9px] text-zinc-650 mb-1 font-mono">TRIGGER KEY</label><input type="text" value={escapeKey} onChange={e=>{setEscapeKey(e.target.value);localStorage.setItem("xena_escape_key",e.target.value);}} className="w-full h-9 rounded-lg border border-zinc-800 bg-black px-3 text-xs font-mono text-white outline-none focus:border-zinc-500"/></div>
+                      <div><label className="block text-[9px] text-zinc-650 mb-1 font-mono">ESCAPE URL</label><input type="text" value={escapeUrl} onChange={e=>{setEscapeUrl(e.target.value);localStorage.setItem("xena_escape_url",e.target.value);}} className="w-full h-9 rounded-lg border border-zinc-800 bg-black px-3 text-xs text-white outline-none focus:border-zinc-500"/></div>
+                    </div>
+                  </div>
+                  <div className="space-y-3 pt-2">
+                    <span className="block text-[9px] font-mono tracking-wider text-zinc-500 uppercase">PROXY MODES ({PROXY_MODES.length})</span>
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 no-scrollbar">
+                      {PROXY_MODES.map(mode=>{const ia=proxyMode===mode.id;return(
+                        <div key={mode.id} onClick={()=>{setProxyMode(mode.id as any);localStorage.setItem("xena_proxy_mode",mode.id);}} className={`p-3 rounded-lg border text-left cursor-pointer transition-all duration-150 ${ia?"bg-zinc-950 border-white text-white translate-x-[2px]":"bg-black border-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"}`}>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2"><div className={`w-2.5 h-2.5 rounded-full ${ia?"bg-emerald-500 animate-pulse border border-emerald-400":"bg-zinc-800"}`}/><span className={`text-xs font-semibold ${ia?"text-white":"text-zinc-300"}`}>{mode.name}</span></div>
+                            <div className="flex items-center gap-1.5 shrink-0"><span className="text-[8px] font-mono font-medium border border-zinc-800 bg-zinc-950 px-1.5 py-0.5 rounded text-zinc-500">{mode.latency}</span><span className={`text-[8px] font-mono font-bold px-1.5 py-0.5 rounded ${ia?"bg-white/15 text-white":"bg-zinc-900 text-zinc-650"}`}>{mode.badge}</span></div>
+                          </div>
+                          <p className={`text-[10px] leading-relaxed mt-1.5 pl-4.5 ${ia?"text-zinc-300 font-medium":"text-zinc-500"}`}>{mode.desc}</p>
+                          {mode.recommend&&<span className="absolute bottom-1 right-2 text-[7px] font-mono font-bold uppercase text-emerald-500 opacity-60">RECOMMENDED</span>}
+                        </div>
+                      );})}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {settingsTab==="search"&&(
+                <div className="space-y-5">
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center"><span className="text-[9px] font-mono font-semibold tracking-wider text-zinc-500 uppercase">Search Logs</span>{searchHistory.length>0&&<button onClick={()=>{setSearchHistory([]);localStorage.removeItem("xena_search_history");}} className="text-[8px] font-mono uppercase bg-zinc-950 px-1.5 py-0.5 border border-zinc-850 hover:bg-zinc-900 text-zinc-400 hover:text-white rounded">Clear</button>}</div>
+                    <div className="max-h-40 overflow-y-auto space-y-1 pr-1 no-scrollbar">{searchHistory.length===0?<div className="text-[10px] text-zinc-600 font-mono py-6 text-center border border-dashed border-zinc-900 rounded-lg">No search queries cached.</div>:searchHistory.map(item=>(<div key={item.id} className="flex items-center justify-between p-2 rounded border border-zinc-900 bg-black/40 hover:border-zinc-850"><div className="flex flex-col min-w-0 flex-1 mr-2 text-left"><span className="text-xs text-white truncate font-medium">{item.query}</span><span className="text-[8px] font-mono uppercase text-zinc-550 mt-0.5">{item.engine} • {item.timestamp}</span></div><div className="flex gap-1 shrink-0"><button onClick={()=>{handleNavigate(item.query);setModal(null);}} className="text-[9px] px-2 py-1 bg-zinc-900 border border-zinc-800 text-white rounded font-mono hover:bg-zinc-800">Search</button><button onClick={()=>{const n=searchHistory.filter(h=>h.id!==item.id);setSearchHistory(n);localStorage.setItem("xena_search_history",JSON.stringify(n));}} className="text-zinc-500 hover:text-red-400 p-1"><Trash2 className="w-3.5 h-3.5"/></button></div></div>))}</div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center"><span className="text-[9px] font-mono font-semibold tracking-wider text-zinc-500 uppercase">Page History</span>{browseHistory.length>0&&<button onClick={()=>{setBrowseHistory([]);localStorage.removeItem("xena_browse_history");}} className="text-[8px] font-mono uppercase bg-zinc-950 px-1.5 py-0.5 border border-zinc-850 hover:bg-zinc-900 text-zinc-400 hover:text-white rounded">Clear</button>}</div>
+                    <div className="max-h-40 overflow-y-auto space-y-1 pr-1 no-scrollbar">{browseHistory.length===0?<div className="text-[10px] text-zinc-600 font-mono py-6 text-center border border-dashed border-zinc-900 rounded-lg">No visited pages.</div>:browseHistory.map(item=>(<div key={item.id} className="flex items-center justify-between p-2 rounded border border-zinc-900 bg-black/40 hover:border-zinc-850"><div className="flex flex-col min-w-0 flex-1 mr-2 text-left"><span className="text-xs text-white truncate font-medium">{item.title}</span><span className="text-[8px] font-mono text-zinc-550 mt-0.5 truncate">{item.url} • {item.timestamp}</span></div><div className="flex gap-1 shrink-0"><button onClick={()=>{setTabs(tabs.map(t=>t.id===activeTabId?{...t,title:item.title,url:item.url,proxyUrl:getProxyUrlFor(item.url)}:t));setModal(null);}} className="text-[9px] px-2.5 py-1 bg-zinc-900 border border-zinc-800 text-white rounded font-mono hover:bg-zinc-800">Go</button><button onClick={()=>{const n=browseHistory.filter(h=>h.id!==item.id);setBrowseHistory(n);localStorage.setItem("xena_browse_history",JSON.stringify(n));}} className="text-zinc-500 hover:text-red-400 p-1"><Trash2 className="w-3.5 h-3.5"/></button></div></div>))}</div>
+                  </div>
+                </div>
+              )}
+              {settingsTab==="ai"&&(
+                <div className="space-y-3">
+                  <div className="p-3 border border-zinc-850 bg-black rounded-lg flex items-center justify-between">
+                    <div><span className="block text-xs font-semibold text-zinc-200 font-mono">Neural Calibration Bypass</span><span className="block text-[9px] text-zinc-550 mt-1 font-mono uppercase">Skip delay on messages</span></div>
+                    <button onClick={()=>{const n=!bypassCalibration;setBypassCalibration(n);localStorage.setItem("xena_bypass_calibration",String(n));}} className={`px-3 py-1 rounded-md text-[10px] font-semibold tracking-wider font-mono transition-all ${bypassCalibration?"bg-white/10 text-white border border-zinc-700":"bg-zinc-950 text-zinc-600"}`}>{bypassCalibration?"BYPASSED":"ACTIVE"}</button>
+                  </div>
+                  <div className="flex justify-between items-center pt-1"><span className="text-[9px] font-mono font-semibold tracking-wider text-zinc-500 uppercase">Sessions ({chatThreads.length})</span><button onClick={()=>startNewThread()} className="text-[8px] font-mono uppercase bg-emerald-950/20 text-emerald-400 border border-emerald-500/20 px-2 py-1 hover:bg-emerald-900/40 rounded flex items-center gap-1 cursor-pointer"><Plus className="w-2.5 h-2.5"/> New</button></div>
+                  <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1 no-scrollbar">{chatThreads.map(thread=>{const ia=thread.id===activeThreadId;return(<div key={thread.id} onClick={()=>{setActiveThreadId(thread.id);localStorage.setItem("xena_active_thread_id",thread.id);}} className={`p-2.5 rounded-lg border text-left cursor-pointer transition-all flex items-center justify-between ${ia?"bg-white/5 border-zinc-700 text-white":"bg-black/40 border-zinc-900 text-zinc-500 hover:border-zinc-800"}`}><div className="flex flex-col min-w-0 mr-3"><span className="text-xs font-semibold font-mono truncate text-zinc-200">{thread.title}</span><span className="text-[8px] font-mono uppercase text-zinc-500 mt-1">{thread.messages.length} messages • {thread.timestamp}</span></div><button onClick={e=>deleteThread(thread.id,e)} className="text-zinc-500 hover:text-red-400 p-1 cursor-pointer"><Trash2 className="w-3.5 h-3.5"/></button></div>);})}</div>
+                </div>
+              )}
+              {settingsTab==="autofix"&&(
+                <div className="space-y-4 font-mono text-center py-6">
+                  <Cpu className="w-12 h-12 mx-auto text-zinc-700 animate-pulse mb-3"/>
+                  <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest">Access Restricted</h4>
+                  <p className="text-[10px] leading-relaxed text-zinc-500 max-w-xs mx-auto font-sans">For security, HackerAI auto-fix is available in the <strong className="text-zinc-300">XENA Dev Panel</strong>.</p>
+                  <button onClick={()=>{createNewTab("/dev.html");setModal(null);}} className="mt-3 px-4 py-1.5 bg-zinc-950 border border-zinc-850 text-[10px] font-mono font-bold tracking-wider text-white hover:bg-zinc-900 rounded-md cursor-pointer hover:border-zinc-700">LAUNCH DEV PANEL</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REPORT MODAL */}
+      {modal==="report"&&(
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-[#050505] border border-zinc-800 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl">
+            <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-850 bg-black">
+              <span className="font-semibold text-xs tracking-wider text-white uppercase">BUG REPORT & SUGGESTIONS</span>
+              <button onClick={()=>setModal(null)} className="text-zinc-500 hover:text-white cursor-pointer"><X className="w-4 h-4"/></button>
+            </header>
+            <div className="p-4 space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                <div><label className="block text-[9px] font-mono tracking-wider text-zinc-500 mb-1.5 uppercase">KIND</label>
+                  <select value={reportForm.kind} onChange={(e:any)=>setReportForm({...reportForm,kind:e.target.value})} className="w-full h-9 rounded-lg border border-zinc-800 bg-black px-2 text-xs text-white focus:border-zinc-500">
+                    <option value="bug">BUG REPORT</option><option value="suggestion">SUGGESTION</option>
+                  </select>
+                </div>
+                <div><label className="block text-[9px] font-mono tracking-wider text-zinc-500 mb-1.5 uppercase">TITLE</label>
+                  <input type="text" value={reportForm.title} onChange={e=>setReportForm({...reportForm,title:e.target.value})} placeholder="Short summary" className="w-full h-9 rounded-lg border border-zinc-800 bg-black px-3 text-xs text-white outline-none focus:border-zinc-500"/>
+                </div>
+              </div>
+              <div><label className="block text-[9px] font-mono tracking-wider text-zinc-500 mb-1.5 uppercase">URL (OPTIONAL)</label>
+                <input type="text" value={reportForm.url} onChange={e=>setReportForm({...reportForm,url:e.target.value})} placeholder="https://..." className="w-full h-9 rounded-lg border border-zinc-800 bg-black px-3 text-xs text-white outline-none focus:border-zinc-500"/>
+              </div>
+              <div><label className="block text-[9px] font-mono tracking-wider text-zinc-500 mb-1.5 uppercase">DETAILS</label>
+                <textarea rows={4} value={reportForm.details} onChange={e=>setReportForm({...reportForm,details:e.target.value})} placeholder="What happened..." className="w-full rounded-lg border border-zinc-800 bg-black p-3 text-xs text-white outline-none resize-none focus:border-zinc-500"/>
+              </div>
+              <button onClick={submitReport} className="w-full h-10 bg-zinc-900 border border-zinc-800 hover:bg-zinc-800 text-white rounded-xl text-xs font-bold font-mono tracking-wider uppercase cursor-pointer">SUBMIT REPORT</button>
+              {reports.length>0&&<div className="pt-4 border-t border-zinc-850 space-y-2"><span className="block text-[9px] font-mono tracking-wider text-zinc-500 uppercase font-bold">Your Submissions ({reports.length})</span><div className="space-y-1.5 max-h-36 overflow-y-auto no-scrollbar">{reports.map(rep=>(<div key={rep.id} className="p-2 border border-zinc-800 bg-black/50 rounded-lg text-[10px]"><span className={`inline-block px-1.5 py-0.5 rounded text-[8px] font-bold uppercase mr-1.5 ${rep.kind==="bug"?"bg-red-500/10 text-red-400 border border-red-500/20":"bg-cyan-500/10 text-cyan-400 border border-cyan-500/20"}`}>{rep.kind}</span><strong className="text-zinc-200">{rep.title}</strong><p className="text-zinc-500 mt-1 font-mono">{rep.details}</p></div>))}</div></div>}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FOOTER */}
+      <footer className="h-6 border-t border-zinc-900 bg-black text-[9px] font-mono tracking-wider text-zinc-500 flex items-center justify-between px-3 select-none shrink-0 relative z-20">
+        <div className="flex items-center gap-3">
+          <span className="flex items-center gap-1.2 font-bold uppercase text-zinc-400"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>SECURE</span>
+          <span className="text-zinc-800">|</span>
+          <span className="uppercase text-zinc-600">ENCRYPTION: ACTIVE</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <span>LATENCY: {ping}MS</span>
+          <span className="text-zinc-800">|</span>
+          <span className="text-zinc-400 font-medium">{currentTime||new Date().toLocaleTimeString()}</span>
+        </div>
+      </footer>
+    </div>
+  );
+}
