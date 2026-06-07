@@ -104,7 +104,7 @@ export default function App() {
   function searchUrl(e:string,q:string):string { const enc=encodeURIComponent(q);const mode=localStorage.getItem("xena_ddg_mode")||"ddg3";if(e==="google")return `https://www.google.com/search?q=${enc}`;if(e==="bing")return `https://www.bing.com/search?q=${enc}`;return (DDG_OPTIONS[mode]?.url||"https://lite.duckduckgo.com/lite/?q=")+enc; }
   function getProxyUrl(urlStr:string,mode:string):string{ if(!urlStr)return"";if(urlStr.startsWith("/")||urlStr.startsWith("http://localhost")||urlStr.startsWith("http://127.0.0.1"))return urlStr;const ytId=getYtId(urlStr);if(ytId)return`/view?v=${encodeURIComponent(ytId)}`;return`/${mode}/${b64e(urlStr)}`; }
   function getDomain(u:string):string{ try{return new URL(u).hostname.replace("www.","");}catch{return"Web";} }
-
+const loadUrl = (urlStr: string) => { go(urlStr); };
   const checkAccessCode=async(code:string)=>{try{const resp=await fetch("/api/auth/validate-code",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code})});const data=await resp.json();if(data.valid&&data.level==="developer"){setDevUnlocked(true);sessionStorage.setItem("xena_dev","true");window.location.href="/dev-console"}else{alert("Invalid access code")}}catch{alert("Error validating code")}};
 
   const go=(input:string)=>{if(!input.trim())return;let fu="",pp="";
