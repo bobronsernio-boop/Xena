@@ -12,6 +12,7 @@ export default defineConfig({
       '/api': 'http://localhost:3000',
       '/view': 'http://localhost:3000',
       '/xena-sw.js': 'http://localhost:3000',
+      '/tiktok': 'http://localhost:3000',
     }
   }
 });
