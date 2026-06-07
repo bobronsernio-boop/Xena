@@ -15,20 +15,23 @@ app.use(cookieParser());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
-// ==================== ACCESS CODES ====================
-const DEV_CODE_HASH = crypto.createHash("sha256").update(
+// ==================== ACCESS CODES (HASHED — NEVER EXPOSED TO FRONTEND) ====================
+// Set XENA_DEV_CODE and XENA_ADMIN_CODE as env vars in Render dashboard
+// The server only stores SHA-256 hashes, never the plaintext codes
+const DEV_HASH = crypto.createHash("sha256").update(
   (process.env.XENA_DEV_CODE || "PNG6G").trim().toUpperCase()
 ).digest("hex");
-const ADMIN_CODE_HASH = crypto.createHash("sha256").update(
+const ADMIN_HASH = crypto.createHash("sha256").update(
   (process.env.XENA_ADMIN_CODE || "V46D9").trim().toUpperCase()
 ).digest("hex");
 
+// POST /api/auth/validate-code — server-side validation only
 app.post("/api/auth/validate-code", (req, res) => {
   const { code } = req.body;
   if (!code || typeof code !== "string") return res.status(400).json({ valid: false, level: null });
   const h = crypto.createHash("sha256").update(code.trim().toUpperCase()).digest("hex");
-  if (h === DEV_CODE_HASH) return res.json({ valid: true, level: "developer" });
-  if (h === ADMIN_CODE_HASH) return res.json({ valid: true, level: "admin" });
+  if (h === DEV_HASH) return res.json({ valid: true, level: "developer" });
+  if (h === ADMIN_HASH) return res.json({ valid: true, level: "admin" });
   return res.json({ valid: false, level: null });
 });
 
@@ -37,11 +40,7 @@ function b64e(v: string): string {
   return Buffer.from(String(v || ""), "utf8").toString("base64").replace(/[+/=]/g, c => c === "+" ? "-" : c === "/" ? "_" : "");
 }
 function b64d(v: string): string {
-  try {
-    let t = String(v || "").replace(/-/g, "+").replace(/_/g, "/");
-    while (t.length % 4) t += "=";
-    return Buffer.from(t, "base64").toString("utf8");
-  } catch { return v; }
+  try { let t = String(v || "").replace(/-/g, "+").replace(/_/g, "/"); while (t.length % 4) t += "="; return Buffer.from(t, "base64").toString("utf8"); } catch { return v; }
 }
 
 const UAS = [
@@ -51,14 +50,11 @@ const UAS = [
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/125.0.0.0 Safari/537.36",
 ];
 function randUA() { return UAS[Math.floor(Math.random() * UAS.length)]; }
+
 // ==================== AGGRESSIVE HTML REWRITE ====================
 function rewriteHTML(html: string, base: string): string {
   const $ = cheerio.load(html);
-
-  if (!$('base').length) {
-    $('head').prepend(`<base href="${base}">`);
-  }
-
+  if (!$('base').length) $('head').prepend(`<base href="${base}">`);
   const rewriteAttr = (sel: string, attr: string) => {
     $(sel).each((_, el) => {
       const v = $(el).attr(attr);
@@ -67,28 +63,15 @@ function rewriteHTML(html: string, base: string): string {
       }
     });
   };
-  rewriteAttr("a[href]", "href");
-  rewriteAttr("form[action]", "action");
-  rewriteAttr("img[src]", "src");
-  rewriteAttr("script[src]", "src");
-  rewriteAttr("link[href]", "href");
-  rewriteAttr("source[src]", "src");
-  rewriteAttr("video[poster]", "poster");
-  rewriteAttr("iframe[src]", "src");
-
+  rewriteAttr("a[href]", "href"); rewriteAttr("form[action]", "action"); rewriteAttr("img[src]", "src");
+  rewriteAttr("script[src]", "src"); rewriteAttr("link[href]", "href"); rewriteAttr("source[src]", "src");
+  rewriteAttr("video[poster]", "poster"); rewriteAttr("iframe[src]", "src");
   $("[style]").each((_, el) => {
     const s = $(el).attr("style");
-    if (s && s.includes("url(")) {
-      $(el).attr("style", s.replace(/url\(['"]?([^'")\s]+)['"]?\)/g, (m: string, u: string) => {
-        try { return `url(/fetch/${b64e(new URL(u, base).href)})`; } catch { return m; }
-      }));
-    }
+    if (s && s.includes("url(")) $(el).attr("style", s.replace(/url\(['"]?([^'")\s]+)['"]?\)/g, (m: string, u: string) => { try { return `url(/fetch/${b64e(new URL(u, base).href)})`; } catch { return m; } }));
   });
-
   $('meta[http-equiv="Content-Security-Policy"]').remove();
   $('meta[http-equiv="X-Frame-Options"]').remove();
-  $('meta[http-equiv="X-Content-Type-Options"]').remove();
-
   let cleaned = $.html();
   cleaned = cleaned
     .replace(/if\s*\(\s*top\s*!==\s*self\s*\)/gi, 'if (false)')
@@ -105,34 +88,25 @@ function rewriteHTML(html: string, base: string): string {
     .replace(/<meta[^>]*http-equiv=["']Content-Security-Policy["'][^>]*>/gi, '')
     .replace(/onload=["'][^"']*top[^"']*["']/gi, '')
     .replace(/<script[^>]*>[\s\S]*?(?:self\s*!==\s*(?:top|parent)|top\s*!==\s*self)[\s\S]*?<\/script>/gi, '');
-
   return cleaned;
 }
+
 async function proxyFetch(targetUrl: string, req: any, res: any) {
   try { new URL(targetUrl); } catch { return res.status(400).send("Invalid URL"); }
-
   const maxRetries = 2;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const headers: Record<string, string> = {
-        "User-Agent": randUA(),
-        "Accept": req.headers["accept"] as string || "*/*",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Referer": new URL(targetUrl).origin,
+        "User-Agent": randUA(), "Accept": req.headers["accept"] as string || "*/*",
+        "Accept-Language": "en-US,en;q=0.9", "Referer": new URL(targetUrl).origin,
       };
       if (req.headers["cookie"]) headers["Cookie"] = req.headers["cookie"] as string;
-
       const resp = await fetch(targetUrl, { headers, redirect: "follow", signal: AbortSignal.timeout(15000) });
       const ct = resp.headers.get("content-type") || "";
-
-      ["x-frame-options", "content-security-policy", "x-content-type-options", "strict-transport-security", "access-control-allow-origin"].forEach(h => {
-        try { res.removeHeader(h); } catch {}
-      });
-
+      ["x-frame-options", "content-security-policy", "x-content-type-options", "strict-transport-security", "access-control-allow-origin"].forEach(h => { try { res.removeHeader(h); } catch {} });
       res.setHeader("Access-Control-Allow-Origin", "*");
       res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
       res.setHeader("Access-Control-Allow-Headers", "*");
-
       if (ct.includes("text/html")) {
         const html = await resp.text();
         const rewritten = rewriteHTML(html, targetUrl);
@@ -151,12 +125,8 @@ async function proxyFetch(targetUrl: string, req: any, res: any) {
           if (len) res.setHeader("Content-Length", len);
           if (resp.status === 206) res.status(206);
           const reader = resp.body.getReader();
-          const pump = async () => {
-            while (true) { const { done, value } = await reader.read(); if (done) break; res.write(Buffer.from(value)); }
-            res.end();
-          };
-          pump().catch(() => res.end());
-          return;
+          const pump = async () => { while (true) { const { done, value } = await reader.read(); if (done) break; res.write(Buffer.from(value)); } res.end(); };
+          pump().catch(() => res.end()); return;
         } else {
           const buf = Buffer.from(await resp.arrayBuffer());
           res.setHeader("Content-Type", ct);
@@ -174,6 +144,40 @@ async function proxyFetch(targetUrl: string, req: any, res: any) {
     }
   }
 }
+
+// ==================== AI CHAT ====================
+app.post("/api/chat", async (req, res) => {
+  const { message, mode } = req.body;
+  if (!message) return res.json({ response: "cheese", timestamp: new Date().toLocaleTimeString() });
+  const start = Date.now();
+  let rt = "";
+  const l = message.toLowerCase();
+  const isSerious = mode === "serious";
+  if (isSerious) {
+    try {
+      const c = new AbortController(); setTimeout(() => c.abort(), 8000);
+      const p = await fetch("https://text.pollinations.ai/" + encodeURIComponent("You are XENA, a helpful AI assistant. Answer concisely: " + message.slice(0, 500)), { signal: c.signal });
+      if (p.ok) { const t = await p.text(); if (t && t.trim().length > 3) rt = t.trim(); }
+    } catch {}
+    if (!rt) rt = "Processing...";
+  } else {
+    if (l === "cheese" || l.includes("say cheese")) {
+      const w = ["tomato","giraffe","pancake","waffle","pickle","biscuit","banana","squid","muffin","cactus","peanut","jellyfish","toaster","penguin"];
+      rt = w[Math.floor(Math.random()*w.length)];
+    } else if (l.includes("homework")||l.includes("math")||l.includes("science")||l.includes("essay")) { rt = "drop the problem and i'll walk u through it."; }
+    else if (l.includes("hi")||l.includes("hello")||l.includes("hey")||l.includes("sup")) { rt = "yo what's good"; }
+    else {
+      try {
+        const c = new AbortController(); setTimeout(() => c.abort(), 5000);
+        const p = await fetch("https://text.pollinations.ai/" + encodeURIComponent("Casual teen friend. Short answer: " + message.slice(0, 300)), { signal: c.signal });
+        if (p.ok) { const t = await p.text(); if (t && t.trim().length > 5) rt = t.trim(); }
+      } catch {}
+      if (!rt) { const g = ["cheese.","tomato.","yo sup bro.","giraffe.","wassup.","pancake.","yo.","pickle.","whats good.","banana.","muffin."]; rt = g[Math.floor(Math.random()*g.length)]; }
+    }
+  }
+  res.json({ response: rt, tokens: Math.ceil(rt.length / 4), elapsedMs: Date.now() - start });
+});
+
 // ==================== ADMIN & REPORT API ====================
 let announcements: { message: string; link?: string; timestamp: string }[] = [];
 let bugReportCount = 0;
@@ -189,77 +193,30 @@ function requireAdmin(req: any, res: any, next: any) {
   const authCode = req.headers["x-admin-code"] as string;
   if (!authCode) return res.status(401).json({ error: "Unauthorized" });
   const h = crypto.createHash("sha256").update(authCode.trim().toUpperCase()).digest("hex");
-  if (h === ADMIN_CODE_HASH || h === DEV_CODE_HASH) { next(); } else { res.status(403).json({ error: "Invalid" }); }
+  if (h === ADMIN_HASH || h === DEV_HASH) { next(); } else { res.status(403).json({ error: "Invalid" }); }
 }
 
 app.post("/api/admin/announcement", requireAdmin, (req, res) => {
-  const { message, link } = req.body;
-  if (!message) return res.status(400).json({ error: "Message required" });
+  const { message, link } = req.body; if (!message) return res.status(400).json({ error: "Message required" });
   announcements.push({ message, link, timestamp: new Date().toISOString() });
   res.json({ success: true, count: announcements.length });
 });
 app.get("/api/admin/announcements", requireAdmin, (req, res) => res.json(announcements));
-app.post("/api/admin/restart", requireAdmin, (req, res) => {
-  res.json({ success: true, message: "Restarting..." });
-  setTimeout(() => process.exit(0), 1000);
-});
-app.get("/api/admin/stats", requireAdmin, (req, res) => {
-  res.json({ bugReports: bugReportCount, announcements: announcements.length, uptime: process.uptime(), memory: process.memoryUsage() });
-});
-app.post("/api/chat", async (req, res) => {
-  const { message, mode } = req.body;
-  if (!message) return res.json({ response: "cheese", timestamp: new Date().toLocaleTimeString() });
-  const start = Date.now();
-  let rt = "";
-  const isSerious = mode === "serious";
-  if (isSerious) {
-    try {
-      const c = new AbortController();
-      setTimeout(() => c.abort(), 8000);
-      const p = await fetch("https://text.pollinations.ai/" + encodeURIComponent(
-        "You are XENA, a helpful AI assistant. Answer concisely: " + message.slice(0, 500)
-      ), { signal: c.signal });
-      if (p.ok) { const t = await p.text(); if (t && t.trim().length > 3) rt = t.trim(); }
-    } catch {}
-    if (!rt) rt = "Processing...";
-  } else {
-    const l = message.toLowerCase();
-    if (l === "cheese" || l.includes("say cheese")) {
-      const w = ["tomato","giraffe","pancake","waffle","pickle","biscuit","banana","squid","muffin","cactus","peanut","jellyfish","toaster","penguin"];
-      rt = w[Math.floor(Math.random()*w.length)];
-    } else if (l.includes("homework")||l.includes("math")||l.includes("science")||l.includes("essay")) {
-      rt = "drop the problem and i'll walk u through it.";
-    } else if (l.includes("hi")||l.includes("hello")||l.includes("hey")||l.includes("sup")) {
-      rt = "yo what's good";
-    } else {
-      try {
-        const c = new AbortController();
-        setTimeout(() => c.abort(), 5000);
-        const p = await fetch("https://text.pollinations.ai/" + encodeURIComponent(
-          "Casual teen friend. Short answer: " + message.slice(0, 300)
-        ), { signal: c.signal });
-        if (p.ok) { const t = await p.text(); if (t && t.trim().length > 5) rt = t.trim(); }
-      } catch {}
-      if (!rt) {
-        const g = ["cheese.", "tomato.", "yo sup bro.", "giraffe.", "wassup.", "pancake.", "yo.", "pickle.", "whats good.", "banana.", "muffin."];
-        rt = g[Math.floor(Math.random()*g.length)];
-      }
-    }
-  }
-  res.json({ response: rt, tokens: Math.ceil(rt.length / 4), elapsedMs: Date.now() - start });
-});
+app.post("/api/admin/restart", requireAdmin, (req, res) => { res.json({ success: true, message: "Restarting..." }); setTimeout(() => process.exit(0), 1000); });
+app.get("/api/admin/stats", requireAdmin, (req, res) => { res.json({ bugReports: bugReportCount, announcements: announcements.length, uptime: process.uptime(), memory: process.memoryUsage() }); });
+
 // ==================== TIKTOK FRONT-END ====================
 app.get("/tiktok", (req, res) => {
   res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <title>TikTok</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;overflow:hidden;height:100vh}
-.app{height:100vh;display:flex;flex-direction:column;position:relative}
+*{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+body{background:#000;color:#fff;overflow:hidden;height:100vh}
+.app{height:100vh;display:flex;flex-direction:column}
 .feed{flex:1;overflow-y:scroll;scroll-snap-type:y mandatory;height:100vh;scrollbar-width:none}
 .feed::-webkit-scrollbar{display:none}
 .video-wrapper{scroll-snap-align:start;height:100vh;position:relative;display:flex;align-items:center;justify-content:center;background:#000}
@@ -281,7 +238,7 @@ body{background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Se
   <div class="feed" id="feed">
     <div class="loading" id="loading"><span></span><span></span><span></span></div>
   </div>
-  <div class="bottom-nav"><button class="active">🏠</button><button>🔍</button><button>➕</button><button>💬</button><button>👤</button></div>
+  <div class="bottom-nav"><button class="active" style="color:#fe2c55">🏠</button><button>🔍</button><button>➕</button><button>💬</button><button>👤</button></div>
 </div>
 <script>
 const PB='/fetch/';
@@ -298,7 +255,7 @@ const loading=document.getElementById('loading');
 VIDEOS.forEach((v,i)=>{
   const w=document.createElement('div');w.className='video-wrapper';
   const src=PB+b64e('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/'+sampleVids[i]);
-  w.innerHTML='<video loop muted playsinline src="'+src+'"></video><div class="loading"><span></span><span></span><span></span></div><div class="side-controls"><button><span class="icon">❤️</span><span class="count">'+v.likes+'</span></button><button><span class="icon">💬</span></button><button><span class="icon">↗️</span></button></div><div class="video-info"><div class="user">'+v.user+'</div><div class="desc">'+v.desc+'</div></div>';
+  w.innerHTML='<video loop muted playsinline src="'+src+'"></video><div class="loading"><span></span><span></span><span></span></div><div class="side-controls"><button><span class="icon">❤️</span><span class="count">'+v.likes+'</span></button><button><span class="icon">💬</span></button><button><span class="icon">↗️</span></button></div><div class="video-info"><div class="user" style="font-weight:bold;margin-bottom:4px">'+v.user+'</div><div class="desc" style="font-size:14px">'+v.desc+'</div></div>';
   const vid=w.querySelector('video');
   vid.addEventListener('loadeddata',()=>{const l=w.querySelector('.loading');if(l)l.remove()});
   w.addEventListener('click',()=>{if(vid.paused)vid.play();else vid.pause()});
@@ -316,8 +273,8 @@ feed.addEventListener('scroll',()=>{
 </body>
 </html>`);
 });
+
 // ==================== PROXY ROUTES ====================
-// Service Worker proxy
 app.all("/sw/*", async (req, res) => {
   const encoded = req.path.replace("/sw/", "").split("?")[0];
   if (!encoded) return res.status(400).send("Missing URL");
@@ -326,11 +283,11 @@ app.all("/sw/*", async (req, res) => {
   return proxyFetch(target, req, res);
 });
 
-// Service Worker registration file
 app.get("/xena-sw.js", (req, res) => {
   res.type("application/javascript").send(`
 const CACHE='xena-cache-v1',PB='/sw/';
-function b64e(s){return btoa(unescape(encodeURIComponent(s))).replace(/[+/=]/g,c=>c==='+'?'-':c==='/'?'_':'')}
+function b64e(s){return btoa(unescape(encodeURIComponent(s))).replace(/[+/=]/g,c=>c==='+'?'-':c==='/'?'_':'');}
+function b64d(s){let t=s.replace(/-/g,'+').replace(/_/g,'/');while(t.length%4)t+='=';return decodeURIComponent(escape(atob(t)));}
 self.addEventListener('install',e=>{self.skipWaiting();e.waitUntil(caches.open(CACHE))});
 self.addEventListener('activate',e=>{e.waitUntil(clients.claim());e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE).map(x=>caches.delete(x)))))});
 self.addEventListener('fetch',e=>{const r=e.request,u=new URL(r.url);
@@ -346,11 +303,9 @@ self.addEventListener('fetch',e=>{const r=e.request,u=new URL(r.url);
     e.respondWith(fetch(PB+b64e(r.url),{headers:{'X-SW-Proxy':'true'}})
       .catch(e=>new Response('SW error: '+e.message,{status:502})))
   }
-});
-`);
+});`);
 });
 
-// Reverse proxy
 app.all("/rev/*", async (req, res) => {
   const encoded = req.path.replace("/rev/", "").split("?")[0];
   if (!encoded) return res.status(400).send("Missing URL");
@@ -364,62 +319,35 @@ app.all("/rev/*", async (req, res) => {
     const ct = resp.headers.get("content-type") || "";
     ["x-frame-options","content-security-policy","x-content-type-options","strict-transport-security"].forEach(h => { try { res.removeHeader(h); } catch {} });
     res.setHeader("Access-Control-Allow-Origin", "*");
-    if (ct.includes("text/html")) {
-      const html = await resp.text();
-      const rewritten = rewriteHTML(html, target);
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      return res.status(resp.status).send(rewritten);
-    } else if (ct.includes("text") || ct.includes("json") || ct.includes("javascript")) {
-      const text = await resp.text();
-      res.setHeader("Content-Type", ct);
-      return res.status(resp.status).send(text);
-    } else if (resp.body && (ct.includes("video") || ct.includes("audio") || ct.includes("octet-stream"))) {
-      res.setHeader("Content-Type", ct);
-      const range = resp.headers.get("content-range");
-      if (range) res.setHeader("Content-Range", range);
-      if (resp.status === 206) res.status(206);
-      const reader = resp.body.getReader();
+    if (ct.includes("text/html")) { const html = await resp.text(); const rewritten = rewriteHTML(html, target); res.setHeader("Content-Type", "text/html; charset=utf-8"); return res.status(resp.status).send(rewritten); }
+    else if (ct.includes("text") || ct.includes("json") || ct.includes("javascript")) { const text = await resp.text(); res.setHeader("Content-Type", ct); return res.status(resp.status).send(text); }
+    else if (resp.body && (ct.includes("video") || ct.includes("audio") || ct.includes("octet-stream"))) {
+      res.setHeader("Content-Type", ct); const range = resp.headers.get("content-range"); if (range) res.setHeader("Content-Range", range);
+      if (resp.status === 206) res.status(206); const reader = resp.body.getReader();
       const pump = async () => { while (true) { const { done, value } = await reader.read(); if (done) break; res.write(Buffer.from(value)); } res.end(); };
-      pump().catch(() => res.end());
-      return;
-    } else {
-      const buf = Buffer.from(await resp.arrayBuffer());
-      res.setHeader("Content-Type", ct);
-      res.setHeader("Cache-Control", "public, max-age=3600");
-      return res.status(resp.status).send(buf);
-    }
+      pump().catch(() => res.end()); return;
+    } else { const buf = Buffer.from(await resp.arrayBuffer()); res.setHeader("Content-Type", ct); res.setHeader("Cache-Control", "public, max-age=3600"); return res.status(resp.status).send(buf); }
   } catch (err: any) { return res.status(502).send(\`Reverse proxy error: \${err.message}\`); }
 });
 
-// Binary proxy
 app.all("/bin/*", async (req, res) => {
   const encoded = req.path.replace("/bin/", "").split("?")[0];
   if (!encoded) return res.status(400).send("Missing URL");
   let target: string;
   try { target = b64d(decodeURIComponent(encoded)); new URL(target); } catch { return res.status(400).send("Invalid"); }
   try {
-    const resp = await fetch(target, {
-      headers: { "User-Agent": randUA(), "Accept": "*/*", "Range": req.headers["range"] as string || "" },
-      redirect: "follow", signal: AbortSignal.timeout(60000)
-    });
+    const resp = await fetch(target, { headers: { "User-Agent": randUA(), "Accept": "*/*", "Range": req.headers["range"] as string || "" }, redirect: "follow", signal: AbortSignal.timeout(60000) });
     const ct = resp.headers.get("content-type") || "application/octet-stream";
     ["x-frame-options","content-security-policy","x-content-type-options"].forEach(h => { try { res.removeHeader(h); } catch {} });
     res.setHeader("Access-Control-Allow-Origin", "*"); res.setHeader("Access-Control-Allow-Headers", "*");
     const contentRange = resp.headers.get("content-range"); const contentLength = resp.headers.get("content-length");
     if (contentRange) res.setHeader("Content-Range", contentRange); res.setHeader("Content-Type", ct);
     if (contentLength) res.setHeader("Content-Length", contentLength); if (resp.status === 206) res.status(206);
-    if (resp.body) {
-      const reader = resp.body.getReader();
-      const pump = async () => { while (true) { const { done, value } = await reader.read(); if (done) break; res.write(Buffer.from(value)); } res.end(); };
-      pump().catch(() => res.end());
-    } else {
-      const buf = Buffer.from(await resp.arrayBuffer());
-      res.status(resp.status).send(buf);
-    }
+    if (resp.body) { const reader = resp.body.getReader(); const pump = async () => { while (true) { const { done, value } = await reader.read(); if (done) break; res.write(Buffer.from(value)); } res.end(); }; pump().catch(() => res.end()); }
+    else { const buf = Buffer.from(await resp.arrayBuffer()); res.status(resp.status).send(buf); }
   } catch (err: any) { if (!res.headersSent) return res.status(502).send(\`Binary stream error: \${err.message}\`); res.end(); }
 });
 
-// Main fetch proxy
 app.all("/fetch/*", async (req, res) => {
   const encoded = req.path.replace("/fetch/", "").split("?")[0];
   if (!encoded) return res.status(400).send("Missing URL");
@@ -428,14 +356,9 @@ app.all("/fetch/*", async (req, res) => {
   return proxyFetch(target, req, res);
 });
 
-// CORS helper
-app.get("/api/cors", async (req, res) => {
-  const target = req.query.url as string;
-  if (!target) return res.status(400).send("Missing ?url=");
-  return proxyFetch(target, req, res);
-});
+app.get("/api/cors", async (req, res) => { const target = req.query.url as string; if (!target) return res.status(400).send("Missing ?url="); return proxyFetch(target, req, res); });
 
-// Bootstrap
+// ==================== BOOTSTRAP ====================
 async function bootstrap() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: "spa" });
@@ -445,10 +368,6 @@ async function bootstrap() {
     app.use(express.static(distPath));
     app.get("*", (req, res) => res.sendFile(path.join(distPath, "index.html")));
   }
-  app.listen(Number(PORT), "0.0.0.0", () => {
-    console.log(\`[XENA] Online on 0.0.0.0:\${PORT}\`);
-    console.log(\`[XENA] Proxies: /sw/* /rev/* /bin/*\`);
-    console.log(\`[XENA] TikTok: /tiktok\`);
-  });
+  app.listen(Number(PORT), "0.0.0.0", () => { console.log(\`[XENA] Online on 0.0.0.0:\${PORT}\`); console.log(\`[XENA] Proxies: /sw/* /rev/* /bin/* TikTok: /tiktok\`); });
 }
 bootstrap();
