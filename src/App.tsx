@@ -214,19 +214,32 @@ export default function App() {
     }
   },[proxyMode]);
 
-  // Access code listener
-  const checkAccessCode=(code:string)=>{
-    if(code==="PNG6G"){
-      setDevUnlocked(true);sessionStorage.setItem("xena_dev","true");
-      setModal("dev");setAccessCodeInput("");
-    } else if(code==="V46D9"){
-      setAdminUnlocked(true);sessionStorage.setItem("xena_admin","true");
-      setModal("admin");setAccessCodeInput("");
+  const checkAccessCode = async (code: string) => {
+  try {
+    const resp = await fetch("/api/auth/validate-code", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code })
+    });
+    const data = await resp.json();
+    if (data.valid && data.level === "developer") {
+      setDevUnlocked(true);
+      sessionStorage.setItem("xena_dev", "true");
+      setModal("dev");
+      setAccessCodeInput("");
+    } else if (data.valid && data.level === "admin") {
+      setAdminUnlocked(true);
+      sessionStorage.setItem("xena_admin", "true");
+      setModal("admin");
+      setAccessCodeInput("");
       fetchAdminStats();
     } else {
       alert("Invalid access code");
     }
-  };
+  } catch {
+    alert("Error validating code");
+  }
+};
 
   const fetchAdminStats=async()=>{
     try{
