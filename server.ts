@@ -6,6 +6,7 @@ import cookieParser from "cookie-parser";
 import { createServer as createViteServer } from "vite";
 import * as cheerio from "cheerio";
 import youtubesearchapi from 'youtube-search-api';
+import crypto from "crypto";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,6 +15,38 @@ app.use(cors());
 app.use(cookieParser());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
+
+// ==================== ACCESS CODES (ENVIRONMENT VARIABLES) ====================
+// Set these in your Render dashboard:
+// XENA_DEV_CODE=PNG6G
+// XENA_ADMIN_CODE=V46D9
+// The codes are NEVER sent to the frontend - only validated server-side via hash
+const DEV_CODE_HASH = process.env.XENA_DEV_CODE 
+  ? crypto.createHash("sha256").update(process.env.XENA_DEV_CODE).digest("hex")
+  : crypto.createHash("sha256").update("PNG6G").digest("hex"); // fallback default
+
+const ADMIN_CODE_HASH = process.env.XENA_ADMIN_CODE
+  ? crypto.createHash("sha256").update(process.env.XENA_ADMIN_CODE).digest("hex")
+  : crypto.createHash("sha256").update("V46D9").digest("hex"); // fallback default
+
+// Server-side code validation - frontend sends code, server checks hash
+app.post("/api/auth/validate-code", (req, res) => {
+  const { code } = req.body;
+  if (!code || typeof code !== "string") {
+    return res.status(400).json({ valid: false, level: null });
+  }
+  
+  const inputHash = crypto.createHash("sha256").update(code.trim().toUpperCase()).digest("hex");
+  
+  if (inputHash === DEV_CODE_HASH) {
+    return res.json({ valid: true, level: "developer" });
+  }
+  if (inputHash === ADMIN_CODE_HASH) {
+    return res.json({ valid: true, level: "admin" });
+  }
+  
+  return res.json({ valid: false, level: null });
+});
 
 // ==================== ENCODING HELPERS ====================
 function b64e(v: string): string {
@@ -146,7 +179,6 @@ async function proxyFetch(targetUrl: string, req: any, res: any) {
         res.setHeader("Content-Type", ct);
         return res.status(resp.status).send(text);
       } else if (ct.includes("video") || ct.includes("audio") || ct.includes("octet-stream")) {
-        // Stream binary data for media
         if (resp.body) {
           res.setHeader("Content-Type", ct);
           const range = resp.headers.get("content-range");
@@ -260,7 +292,6 @@ app.post("/api/chat", async (req, res) => {
   const isSerious = mode === "serious";
 
   if (isSerious) {
-    // Serious mode - use Pollinations as actual AI
     try {
       const c = new AbortController(); setTimeout(() => c.abort(), 8000);
       const p = await fetch("https://text.pollinations.ai/" + encodeURIComponent(
@@ -270,7 +301,6 @@ app.post("/api/chat", async (req, res) => {
     } catch {}
     if (!rt) rt = "I'm processing your request. Could you rephrase that?";
   } else {
-    // Chill mode - fun responses
     if (l === "cheese" || l.includes("say cheese")) {
       const w = ["tomato", "giraffe", "pancake", "waffle", "sneaker", "pickle", "biscuit", "banana", "squid", "muffin", "cactus", "peanut", "jellyfish", "toaster", "penguin"];
       rt = w[Math.floor(Math.random() * w.length)];
@@ -301,11 +331,31 @@ app.get("/view", (req, res) => {
   res.sendFile(path.resolve(process.cwd(), "frontend.html"));
 });
 
-// ==================== ADMIN API ====================
-// Store announcements
+// ==================== ADMIN & REPORT API ====================
 let announcements: { message: string; link?: string; timestamp: string }[] = [];
+let bugReportCount = 0;
 
-app.post("/api/admin/announcement", (req, res) => {
+app.post("/api/report", (req, res) => {
+  const { kind, title, url, details } = req.body;
+  bugReportCount++;
+  console.log(`[Report #${bugReportCount}] ${kind}: ${title}`);
+  res.json({ success: true, id: bugReportCount });
+});
+
+// Protected admin endpoints - require valid code in Authorization header
+function requireAdmin(req: any, res: any, next: any) {
+  const authCode = req.headers["x-admin-code"] as string;
+  if (!authCode) return res.status(401).json({ error: "Unauthorized" });
+  
+  const inputHash = crypto.createHash("sha256").update(authCode.trim().toUpperCase()).digest("hex");
+  if (inputHash === ADMIN_CODE_HASH || inputHash === DEV_CODE_HASH) {
+    next();
+  } else {
+    res.status(403).json({ error: "Invalid access code" });
+  }
+}
+
+app.post("/api/admin/announcement", requireAdmin, (req, res) => {
   const { message, link } = req.body;
   if (!message) return res.status(400).json({ error: "Message required" });
   announcements.push({ message, link, timestamp: new Date().toISOString() });
@@ -313,26 +363,17 @@ app.post("/api/admin/announcement", (req, res) => {
   res.json({ success: true, count: announcements.length });
 });
 
-app.get("/api/admin/announcements", (req, res) => {
+app.get("/api/admin/announcements", requireAdmin, (req, res) => {
   res.json(announcements);
 });
 
-app.post("/api/admin/restart", (req, res) => {
+app.post("/api/admin/restart", requireAdmin, (req, res) => {
   console.log("[Admin] Server restart requested");
   res.json({ success: true, message: "Server will restart" });
   setTimeout(() => process.exit(0), 1000);
 });
 
-// Get bug reports count
-let bugReportCount = 0;
-app.post("/api/report", (req, res) => {
-  const { kind, title, url, details } = req.body;
-  bugReportCount++;
-  console.log(`[Report #${bugReportCount}] ${kind}: ${title} | ${details?.slice(0, 100)}...`);
-  res.json({ success: true, id: bugReportCount });
-});
-
-app.get("/api/admin/stats", (req, res) => {
+app.get("/api/admin/stats", requireAdmin, (req, res) => {
   res.json({
     bugReports: bugReportCount,
     announcements: announcements.length,
@@ -597,8 +638,7 @@ async function bootstrap() {
 
   app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`[XENA] Online on 0.0.0.0:${PORT}`);
-    console.log(`[XENA] Developer Code: PNG6G`);
-    console.log(`[XENA] Admin Code: V46D9`);
+    console.log(`[XENA] Proxies: /sw/* /rev/* /bin/*`);
   });
 }
 bootstrap();
