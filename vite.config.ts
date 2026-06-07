@@ -10,4 +10,8 @@ export default defineConfig({
       '/rev': 'http://localhost:3000',
       '/bin': 'http://localhost:3000',
       '/api': 'http://localhost:3000',
-      '/view': 'http://localhost:3000
+      '/view': 'http://localhost:3000',
+      '/xena-sw.js': 'http://localhost:3000',
+    }
+  }
+});
