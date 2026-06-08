@@ -1,7 +1,7 @@
 {
   "name": "xena-browser",
   "private": true,
-  "version": "1.0.0",
+  "version": "3.0.0",
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
@@ -16,6 +16,7 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "express": "^4.21.2",
+    "http-proxy-middleware": "^3.0.5",
     "lucide-react": "^0.468.0",
     "postcss": "^8.4.49",
     "react": "^18.3.1",
