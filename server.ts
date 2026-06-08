@@ -306,8 +306,8 @@ app.all('/xt/*', async (req, res) => {
       // Inject XT bridge
       const bridge = `<script>(function(){window.__xena={base:'${p}',origin:'${new URL(target).origin}',target:'${target}'};
         const oc=document.createElement.bind(document);
-        document.createElement=function(tag){const el=oc(tag);if(['a','link','form'].includes(tag.toLowerCase())){const os=el.setAttribute.bind(el);el.setAttribute=function(n,v){if((n==='href'||n==='action')&&v&&!v.startsWith(window.__xena.base)){try{v=window.__xena.base+btoa(new URL(v,window.__xena.origin).href).replace(/[+/=]/g,c=>c==='+'?'-':c==='/'?'_':'')}catch(e){}}return os(n,v)}}return el};
-        const ow=window.open.bind(window);window.open=function(u,...a){if(u&&!u.startsWith(window.__xena.base)){try{u=window.__xena.base+btoa(new URL(u,window.__xena.origin).href).replace(/[+/=]/g,c=>c==='+'?'-':c==='/'?'_':'')}catch(e){}}return ow(u,...a)};
+        document.createElement=function(tag){const el=oc(tag);if(['a','link','form'].includes(tag.toLowerCase())){const os=el.setAttribute.bind(el);el.setAttribute=function(n,v){if((n==='href'||n==='a[...]
+        const ow=window.open.bind(window);window.open=function(u,...a){if(u&&!u.startsWith(window.__xena.base)){try{u=window.__xena.base+btoa(new URL(u,window.__xena.origin).href).replace(/[+/=]/g,c=>[...]
         try{Object.defineProperty(window,'frameElement',{value:null,writable:false})}catch(e){}
         try{Object.defineProperty(window,'top',{value:window,writable:false})}catch(e){}
         try{Object.defineProperty(window,'parent',{value:window,writable:false})}catch(e){}
@@ -628,13 +628,17 @@ async function bootstrap() {
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
     app.use(vite.middlewares);
+    // Dev mode SPA fallback
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(process.cwd(), 'index.html'));
+    });
   } else {
     // Serve static files AFTER all API routes
     app.use(express.static(path.join(process.cwd(), 'dist'), { 
       maxAge: '1d',
       etag: false 
     }));
-    // SPA fallback: redirect all non-API routes to index.html
+    // Production SPA fallback: redirect all non-API routes to index.html
     app.get('*', (_req, res) => {
       res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
     });
