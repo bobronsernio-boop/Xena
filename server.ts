@@ -156,6 +156,15 @@ app.post('/api/auth/validate-code', (req, res) => {
   return res.json({ valid: false, role: null });
 });
 
+app.post('/api/check-code', (req, res) => {
+  const { code } = req.body;
+  if (!code || typeof code !== 'string') return res.json({ valid: false, role: null });
+  const h = crypto.createHash('sha256').update(code.trim().toUpperCase()).digest('hex');
+  if (h === DEV_CODE_HASH) return res.json({ valid: true, role: 'developer' });
+  if (h === ADMIN_CODE_HASH) return res.json({ valid: true, role: 'admin' });
+  return res.json({ valid: false, role: null });
+});
+
 function authMw(req: express.Request, res: express.Response, next: express.NextFunction) {
   const code = req.headers['x-access-code'];
   if (!code || typeof code !== 'string') return res.status(401).json({ error: 'Access code required' });
@@ -297,7 +306,7 @@ app.all('/xt/*', async (req, res) => {
       // Inject XT bridge
       const bridge = `<script>(function(){window.__xena={base:'${p}',origin:'${new URL(target).origin}',target:'${target}'};
         const oc=document.createElement.bind(document);
-        document.createElement=function(tag){const el=oc(tag);if(['a','link','form'].includes(tag.toLowerCase())){const os=el.setAttribute.bind(el);el.setAttribute=function(n,v){if((n==='href'||n==='action')&&v&&!v.startsWith('#')&&!v.startsWith('javascript:')){try{v=window.__xena.base+btoa(new URL(v,window.__xena.origin).href).replace(/[+/=]/g,c=>c==='+'?'-':c==='/'?'_':'')}catch(e){}}return os(n,v)};}}return el};
+        document.createElement=function(tag){const el=oc(tag);if(['a','link','form'].includes(tag.toLowerCase())){const os=el.setAttribute.bind(el);el.setAttribute=function(n,v){if((n==='href'||n==='action')&&v&&!v.startsWith(window.__xena.base)){try{v=window.__xena.base+btoa(new URL(v,window.__xena.origin).href).replace(/[+/=]/g,c=>c==='+'?'-':c==='/'?'_':'')}catch(e){}}return os(n,v)}}return el};
         const ow=window.open.bind(window);window.open=function(u,...a){if(u&&!u.startsWith(window.__xena.base)){try{u=window.__xena.base+btoa(new URL(u,window.__xena.origin).href).replace(/[+/=]/g,c=>c==='+'?'-':c==='/'?'_':'')}catch(e){}}return ow(u,...a)};
         try{Object.defineProperty(window,'frameElement',{value:null,writable:false})}catch(e){}
         try{Object.defineProperty(window,'top',{value:window,writable:false})}catch(e){}
@@ -620,8 +629,15 @@ async function bootstrap() {
     const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
     app.use(vite.middlewares);
   } else {
-    app.use(express.static(path.join(process.cwd(), 'dist')));
-    app.get('*', (_req, res) => res.sendFile(path.join(process.cwd(), 'dist', 'index.html')));
+    // Serve static files AFTER all API routes
+    app.use(express.static(path.join(process.cwd(), 'dist'), { 
+      maxAge: '1d',
+      etag: false 
+    }));
+    // SPA fallback: redirect all non-API routes to index.html
+    app.get('*', (_req, res) => {
+      res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
+    });
   }
   app.listen(Number(PORT), '0.0.0.0', () => console.log(`[XENA] Online on 0.0.0.0:${PORT}`));
 }
