@@ -49,7 +49,7 @@ const FUN_FACTS = [
   'The QWERTY keyboard was designed to slow typists down',
   'The first webcam was created to monitor a coffee pot',
   'CAPTCHA stands for Completely Automated Public Turing test',
-  'The first computer bug was an actual moth found in a computer'
+  'The first computer bug was an actual moth found in a computer',
   'The hashtag symbol is officially called an octothorpe',
 'The first domain name ever registered was Symbolics.com',
 'The original name for Windows was Interface Manager',
